@@ -1,0 +1,85 @@
+name: Build APK & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;25.2.9519653"
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/25.2.9519653
+
+      - name: Find APK
+        id: find_apk
+        run: |
+          APK_PATH=$(find ZalithLauncher/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "apk_name=$(basename $APK_PATH)" >> $GITHUB_OUTPUT
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZalithLauncher-debug
+          path: ${{ steps.find_apk.outputs.apk_path }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.4.3-build.${{ github.run_number }}
+          name: "ZalithLauncher v2.4.3 (Build #${{ github.run_number }})"
+          body: |
+            ## ZalithLauncher Debug Build
+
+            Автоматическая сборка из ветки `${{ github.ref_name }}`
+
+            ### Возможности:
+            - Вход через Microsoft аккаунт
+            - Вход через оффлайн (локальный) аккаунт
+            - Вход через сторонние серверы авторизации
+
+            ### Установка:
+            1. Скачайте APK файл ниже
+            2. Установите на Android устройство (Android 8.0+)
+          files: ${{ steps.find_apk.outputs.apk_path }}
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
