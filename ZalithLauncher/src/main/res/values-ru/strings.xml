@@ -446,6 +446,10 @@
     <string name="download_assets_filter_sort_by_recently_updated">Недавно обновлено</string>
     <string name="download_assets_result_previous_page">Предыдущая страница</string>
     <string name="download_assets_result_next_page">Следующая страница</string>
+    <string name="download_assets_batch_select_all">Выбрать все</string>
+    <string name="download_assets_batch_deselect_all">Снять выделение</string>
+    <string name="download_assets_batch_download">Скачать %d мод(ов)</string>
+    <string name="download_assets_batch_close_selection">Закрыть выделение</string>
     <string name="download_assets_failed_to_get_result">Не удалось получить результаты поиска: %s. Нажмите, чтобы повторить попытку.</string>
     <string name="download_assets_failed_to_get_project">Не удалось получить информацию о проекте: %s. Нажмите, чтобы повторить попытку.</string>
     <string name="download_assets_failed_to_get_versions">Не удалось получить список версий: %s. Нажмите, чтобы повторить попытку.</string>

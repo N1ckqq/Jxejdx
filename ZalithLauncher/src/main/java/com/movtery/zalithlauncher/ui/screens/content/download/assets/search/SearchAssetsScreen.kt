@@ -55,6 +55,7 @@ import com.movtery.zalithlauncher.ui.base.BaseScreen
 import com.movtery.zalithlauncher.ui.screens.NestedNavKey
 import com.movtery.zalithlauncher.ui.screens.TitledNavKey
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.AssetsPage
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.BatchDownloadState
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.ResultListLayout
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.SearchAssetsState
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.SearchFilter
@@ -268,6 +269,7 @@ fun SearchAssetsScreen(
     getModloaders: (Platform) -> List<PlatformDisplayLabel> = { emptyList() },
     mapCategories: (Platform, String) -> PlatformFilterCode?,
     swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> },
+    batchState: BatchDownloadState? = null,
     extraFilter: (LazyListScope.() -> Unit)? = null
 ) {
     val viewModel: SearchScreenViewModel = rememberSearchAssetsViewModel(
@@ -304,6 +306,7 @@ fun SearchAssetsScreen(
                     viewModel.search()
                 },
                 swapToDownload = swapToDownload,
+                batchState = batchState,
                 onPreviousPage = { pageNumber ->
                     previousPage(
                         pageNumber = pageNumber,

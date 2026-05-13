@@ -25,8 +25,10 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +49,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -121,6 +124,7 @@ sealed interface SearchAssetsState {
  * 资源搜索结果展示列表
  * @param swapToDownload 跳转到下载详情页
  * @param onNavigatePage 导航到指定页面
+ * @param batchState 批量下载状态（可选）
  */
 @Composable
 fun ResultListLayout(
@@ -134,7 +138,8 @@ fun ResultListLayout(
     onPreviousPage: (pageNumber: Int) -> Unit,
     onNextPage: (pageNumber: Int, isLastPage: Boolean) -> Unit,
     onNavigatePage: (Int) -> Unit,
-    swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> }
+    swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> },
+    batchState: BatchDownloadState? = null
 ) {
     when (searchState) {
         is SearchAssetsState.Searching -> {
@@ -174,7 +179,8 @@ fun ResultListLayout(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 60.dp, bottom = 6.dp),
                     classes = classes,
                     data = page.data,
-                    swapToDownload = swapToDownload
+                    swapToDownload = swapToDownload,
+                    batchState = batchState
                 )
 
                 val targetScale = 1f - (1f - controllerMinScale) * fraction
@@ -194,6 +200,64 @@ fun ResultListLayout(
                             transformOrigin = TransformOrigin(1f, 0f)
                         }
                 ) {
+                    // Batch selection controls
+                    batchState?.let { batch ->
+                        AnimatedVisibility(
+                            visible = batch.isSelectionMode,
+                            enter = expandHorizontally() + fadeIn(),
+                            exit = shrinkHorizontally() + fadeOut()
+                        ) {
+                            Surface(
+                                modifier = Modifier.padding(end = 6.dp),
+                                shape = MaterialTheme.shapes.large,
+                                color = cardColor(),
+                                contentColor = onCardColor()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Selected count badge
+                                    Text(
+                                        modifier = Modifier.padding(horizontal = 8.dp),
+                                        text = "${batch.selectedCount}",
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    // Select all
+                                    IconButton(
+                                        onClick = {
+                                            val items = page.data.map { it.first }
+                                            batch.selectAll(items)
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_select_all),
+                                            contentDescription = "Select all"
+                                        )
+                                    }
+                                    // Deselect all
+                                    IconButton(
+                                        onClick = { batch.deselectAll() }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_deselect),
+                                            contentDescription = "Deselect all"
+                                        )
+                                    }
+                                    // Close selection mode
+                                    IconButton(
+                                        onClick = { batch.disableSelectionMode() }
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_close),
+                                            contentDescription = "Close"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     PageController(
                         modifier = Modifier.padding(end = 6.dp),
                         page = page,
@@ -359,6 +423,7 @@ private fun PageController(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultList(
     modifier: Modifier = Modifier,
@@ -366,7 +431,8 @@ private fun ResultList(
     contentPadding: PaddingValues = PaddingValues(),
     classes: PlatformClasses,
     data: List<Pair<PlatformSearchData, ModTranslations.McMod?>>,
-    swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> }
+    swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> },
+    batchState: BatchDownloadState? = null
 ) {
     val context = LocalContext.current
     LazyColumn(
@@ -384,6 +450,8 @@ private fun ResultList(
             val follows = remember(item) { item.platformFollows() }
             val modloaders = remember(item) { item.platformModLoaders() }
             val categories = remember(item, classes) { item.platformCategories(classes) }
+            val projectId = remember(item) { item.platformId() }
+            val isSelected = batchState?.isSelected(projectId) ?: false
 
             ResultItemLayout(
                 modifier = Modifier
@@ -398,14 +466,28 @@ private fun ResultList(
                 follows = follows,
                 modloaders = modloaders,
                 categories = categories?.sortedWith { o1, o2 -> o1.index() - o2.index() },
+                showCheckbox = batchState?.isSelectionMode ?: false,
+                isChecked = isSelected,
+                onCheckedChange = {
+                    batchState?.toggleSelection(item)
+                },
                 onClick = {
-                    swapToDownload(platform, item.platformId(), iconUrl)
+                    if (batchState?.isSelectionMode == true) {
+                        batchState.toggleSelection(item)
+                    } else {
+                        swapToDownload(platform, item.platformId(), iconUrl)
+                    }
+                },
+                onLongClick = {
+                    batchState?.enableSelectionMode()
+                    batchState?.toggleSelection(item)
                 }
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultItemLayout(
     modifier: Modifier = Modifier,
@@ -418,10 +500,14 @@ private fun ResultItemLayout(
     follows: Long? = null,
     modloaders: List<PlatformDisplayLabel>? = null,
     categories: List<PlatformFilterCode>? = null,
+    showCheckbox: Boolean = false,
+    isChecked: Boolean = false,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
     shape: Shape = MaterialTheme.shapes.large,
     color: Color = cardColor(),
     contentColor: Color = onCardColor(),
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -433,16 +519,29 @@ private fun ResultItemLayout(
     Surface(
         modifier = modifier.graphicsLayer(scaleY = scale.value, scaleX = scale.value),
         shape = shape,
-        color = color,
-        contentColor = contentColor,
-        onClick = onClick
+        color = if (isChecked) MaterialTheme.colorScheme.primaryContainer else color,
+        contentColor = if (isChecked) MaterialTheme.colorScheme.onPrimaryContainer else contentColor,
     ) {
         Row(
             modifier = Modifier
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
                 .padding(all = 8.dp)
                 .height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Checkbox for batch selection
+            AnimatedVisibility(visible = showCheckbox) {
+                Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = onCheckedChange,
+                    modifier = Modifier.size(40.dp)
+                )
+            }
+
             AssetsIcon(
                 modifier = Modifier
                     .clip(shape = RoundedCornerShape(10.dp))

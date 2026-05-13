@@ -228,6 +228,10 @@
     <string name="download_assets_result_authors">By %s</string>
     <string name="download_assets_result_previous_page">Previous Page</string>
     <string name="download_assets_result_next_page">Next Page</string>
+    <string name="download_assets_batch_select_all">Select All</string>
+    <string name="download_assets_batch_deselect_all">Deselect All</string>
+    <string name="download_assets_batch_download">Download %d mod(s)</string>
+    <string name="download_assets_batch_close_selection">Close Selection</string>
     <string name="download_assets_failed_to_get_result">Failed to get search results: %s. Tap to retry.</string>
     <string name="download_assets_failed_to_get_project">Failed to retrieve project information: %s. Tap to retry.</string>
     <string name="download_assets_failed_to_get_versions">Failed to retrieve version list: %s. Tap to retry.</string>

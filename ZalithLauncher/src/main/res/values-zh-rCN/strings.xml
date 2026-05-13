@@ -227,6 +227,10 @@
     <string name="download_assets_result_authors">作者：%s</string>
     <string name="download_assets_result_previous_page">上一页</string>
     <string name="download_assets_result_next_page">下一页</string>
+    <string name="download_assets_batch_select_all">全选</string>
+    <string name="download_assets_batch_deselect_all">取消全选</string>
+    <string name="download_assets_batch_download">下载 %d 个模组</string>
+    <string name="download_assets_batch_close_selection">关闭选择</string>
     <string name="download_assets_failed_to_get_result">获取搜索结果失败：%s，点击重试。</string>
     <string name="download_assets_failed_to_get_project">获取项目信息失败：%s，点击重试。</string>
     <string name="download_assets_failed_to_get_versions">获取版本列表失败：%s，点击重试。</string>

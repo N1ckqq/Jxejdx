@@ -30,6 +30,7 @@ import com.movtery.zalithlauncher.game.download.assets.platform.modrinth.models.
 import com.movtery.zalithlauncher.setting.AllSettings
 import com.movtery.zalithlauncher.ui.screens.NormalNavKey
 import com.movtery.zalithlauncher.ui.screens.TitledNavKey
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.BatchDownloadState
 
 @Composable
 fun SearchModScreen(
@@ -37,6 +38,7 @@ fun SearchModScreen(
     downloadScreenKey: TitledNavKey?,
     downloadModScreenKey: TitledNavKey,
     downloadModScreenCurrentKey: TitledNavKey?,
+    batchState: BatchDownloadState? = null,
     swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> }
 ) {
     val initialPlatform = remember {
@@ -77,6 +79,7 @@ fun SearchModScreen(
                 }
             }
         },
-        swapToDownload = swapToDownload
+        swapToDownload = swapToDownload,
+        batchState = batchState
     )
 }
