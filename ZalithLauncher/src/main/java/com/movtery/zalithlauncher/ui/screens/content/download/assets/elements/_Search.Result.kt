@@ -468,7 +468,7 @@ private fun ResultList(
                 categories = categories?.sortedWith { o1, o2 -> o1.index() - o2.index() },
                 showCheckbox = batchState?.isSelectionMode ?: false,
                 isChecked = isSelected,
-                onCheckedChange = {
+                onCheckedChange = { _ ->
                     batchState?.toggleSelection(item)
                 },
                 onClick = {
