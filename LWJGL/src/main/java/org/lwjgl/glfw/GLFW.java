@@ -4,7 +4,12 @@
  */
 package org.lwjgl.glfw;
 
+import android.content.Context;
+import android.hardware.display.DisplayManager;
 import android.util.*;
+import android.view.Display;
+
+import com.movtery.zalithlauncher.context.ContextsKt;
 
 import java.lang.reflect.*;
 import java.nio.*;
@@ -554,7 +559,7 @@ public class GLFW
         memPutInt(mGLFWVideoMode.address() + mGLFWVideoMode.REDBITS, 8);
         memPutInt(mGLFWVideoMode.address() + mGLFWVideoMode.GREENBITS, 8);
         memPutInt(mGLFWVideoMode.address() + mGLFWVideoMode.BLUEBITS, 8);
-        memPutInt(mGLFWVideoMode.address() + mGLFWVideoMode.REFRESHRATE, 60);
+        memPutInt(mGLFWVideoMode.address() + mGLFWVideoMode.REFRESHRATE, 60); // updated at runtime via updateVideoModeRefreshRate()
 
         // A way to generate key code names
         Field[] thisFieldArr = GLFW.class.getFields();
@@ -648,6 +653,15 @@ public class GLFW
         if (mGLFWVideoMode == null) return;
         memPutInt(mGLFWVideoMode.address() + (long) mGLFWVideoMode.WIDTH, mGLFWWindowWidth);
         memPutInt(mGLFWVideoMode.address() + (long) mGLFWVideoMode.HEIGHT, mGLFWWindowHeight);
+    }
+
+    /**
+     * Updates the video mode refresh rate using the real device display refresh rate.
+     * Should be called once the Android Context is available (e.g. from the renderer init).
+     */
+    public static void updateVideoModeRefreshRate() {
+        if (mGLFWVideoMode == null) return;
+        memPutInt(mGLFWVideoMode.address() + (long) mGLFWVideoMode.REFRESHRATE, getDisplayRefreshRate());
     }
 
     public static GLFWWindowProperties internalGetWindow(long window) {
@@ -1015,7 +1029,28 @@ public class GLFW
     }
 
     public static long glfwGetTimerFrequency() {
-        // FIXME set correct value!!
+        // glfwGetTimerValue() uses System.currentTimeMillis(), so frequency is 1000 Hz
+        return 1000L;
+    }
+
+    /**
+     * Returns the current display refresh rate in Hz, defaulting to 60 if unavailable.
+     */
+    private static int getDisplayRefreshRate() {
+        try {
+            Context ctx = ContextsKt.getGlobalContext();
+            DisplayManager dm = (DisplayManager) ctx.getSystemService(Context.DISPLAY_SERVICE);
+            if (dm != null) {
+                Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
+                if (display != null) {
+                    float rate = display.getRefreshRate();
+                    int rounded = Math.round(rate);
+                    if (rounded > 0) return rounded;
+                }
+            }
+        } catch (Throwable t) {
+            // Fallback to 60 if anything goes wrong
+        }
         return 60;
     }
 

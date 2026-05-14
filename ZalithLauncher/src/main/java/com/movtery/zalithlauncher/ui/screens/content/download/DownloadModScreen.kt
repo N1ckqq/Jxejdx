@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -45,6 +46,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.movtery.zalithlauncher.R
+import com.movtery.zalithlauncher.game.download.assets.downloadBatchMods
 import com.movtery.zalithlauncher.game.download.assets.downloadSingleForVersions
 import com.movtery.zalithlauncher.game.download.assets.downloadDependenciesForVersions
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformClasses
@@ -52,6 +54,7 @@ import com.movtery.zalithlauncher.ui.screens.NestedNavKey
 import com.movtery.zalithlauncher.ui.screens.NormalNavKey
 import com.movtery.zalithlauncher.ui.screens.TitledNavKey
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.download.DownloadAssetsScreen
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.BatchVersionSelectDialog
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.DownloadSingleOperation
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.rememberBatchDownloadState
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.search.SearchModScreen
@@ -82,6 +85,27 @@ fun DownloadModScreen(
 
     // Batch download state
     val batchState = rememberBatchDownloadState()
+    // Whether to show the batch version-select dialog
+    var showBatchDialog by remember { mutableStateOf(false) }
+
+    if (showBatchDialog) {
+        BatchVersionSelectDialog(
+            modCount = batchState.selectedCount,
+            onDismiss = { showBatchDialog = false },
+            onInstall = { gameVersions ->
+                showBatchDialog = false
+                val selected = batchState.getSelectedList()
+                batchState.disableSelectionMode()
+                downloadBatchMods(
+                    context = context,
+                    mods = selected,
+                    targetVersions = gameVersions,
+                    folder = PlatformClasses.MOD.versionFolder.folderName,
+                    submitError = submitError
+                )
+            }
+        )
+    }
 
     //下载资源操作
     var operation by remember { mutableStateOf<DownloadSingleOperation>(DownloadSingleOperation.None) }
@@ -175,14 +199,7 @@ fun DownloadModScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        // Navigate to download page for each selected mod
-                        val selected = batchState.getSelectedList()
-                        selected.forEach { mod ->
-                            backStack.navigateTo(
-                                NormalNavKey.DownloadAssets(mod.platform, mod.projectId, PlatformClasses.MOD)
-                            )
-                        }
-                        batchState.disableSelectionMode()
+                        showBatchDialog = true
                     },
                     icon = {
                         Icon(
@@ -191,7 +208,7 @@ fun DownloadModScreen(
                         )
                     },
                     text = {
-                        Text(text = "${batchState.selectedCount} mod(s)")
+                        Text(text = stringResource(R.string.download_mods_batch_selected, batchState.selectedCount))
                     }
                 )
             }

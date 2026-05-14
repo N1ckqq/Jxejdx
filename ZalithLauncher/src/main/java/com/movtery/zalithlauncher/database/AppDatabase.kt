@@ -29,12 +29,14 @@ import com.movtery.zalithlauncher.game.account.Account
 import com.movtery.zalithlauncher.game.account.AccountDao
 import com.movtery.zalithlauncher.game.account.auth_server.data.AuthServer
 import com.movtery.zalithlauncher.game.account.auth_server.data.AuthServerDao
+import com.movtery.zalithlauncher.game.download.history.DownloadRecord
+import com.movtery.zalithlauncher.game.download.history.DownloadRecordDao
 import com.movtery.zalithlauncher.game.path.GamePath
 import com.movtery.zalithlauncher.game.path.GamePathDao
 
 @Database(
-    entities = [Account::class, AuthServer::class, GamePath::class],
-    version = 2,
+    entities = [Account::class, AuthServer::class, GamePath::class, DownloadRecord::class],
+    version = 3,
     exportSchema = false //默认不支持导出
 )
 @TypeConverters(Converters::class)
@@ -54,6 +56,11 @@ abstract class AppDatabase : RoomDatabase() {
      */
     abstract fun gamePathDao(): GamePathDao
 
+    /**
+     * 下载历史记录
+     */
+    abstract fun downloadRecordDao(): DownloadRecordDao
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -61,6 +68,22 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE accounts ADD COLUMN expiresAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS downloadHistory (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        fileName TEXT NOT NULL,
+                        platform TEXT NOT NULL,
+                        projectId TEXT NOT NULL,
+                        fileSize INTEGER NOT NULL,
+                        installedVersions TEXT NOT NULL,
+                        downloadedAt INTEGER NOT NULL
+                    )"""
+                )
             }
         }
 
@@ -74,7 +97,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "launcher_data.db"
                 )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
                 INSTANCE = instance
                 instance

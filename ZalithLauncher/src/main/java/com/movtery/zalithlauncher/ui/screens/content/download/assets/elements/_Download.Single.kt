@@ -518,3 +518,105 @@ private fun AssetsVersionDependencyItem(
         }
     }
 }
+
+
+
+/**
+ * Диалог выбора версий для пакетной загрузки модов.
+ * Позволяет выбрать одну или несколько игровых версий,
+ * в которые будут установлены все выбранные моды.
+ */
+@Composable
+fun BatchVersionSelectDialog(
+    modCount: Int,
+    onDismiss: () -> Unit,
+    onInstall: (List<Version>) -> Unit
+) {
+    val versions = remember { VersionsManager.versions.filter { it.isValid() } }
+    val version by VersionsManager.currentVersion.collectAsStateWithLifecycle()
+    val version0 = version
+
+    if (version0 == null || versions.isEmpty()) {
+        SimpleAlertDialog(
+            title = stringResource(R.string.generic_warning),
+            text = stringResource(R.string.download_assets_no_installed_versions),
+            confirmText = stringResource(R.string.generic_got_it),
+            onDismiss = onDismiss
+        )
+    } else {
+        val selectedVersions = remember { mutableStateListOf(version0) }
+
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .padding(all = 6.dp)
+                        .heightIn(max = maxHeight - 12.dp)
+                        .wrapContentHeight(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = cardColor(false),
+                    contentColor = onCardColor(),
+                    shadowElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        MarqueeText(
+                            text = stringResource(R.string.download_mods_batch_install_for_versions, modCount),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        val listState = rememberLazyListState()
+                        LaunchedEffect(Unit) {
+                            val target = selectedVersions.firstOrNull() ?: return@LaunchedEffect
+                            runCatching {
+                                val index = versions.indexOf(target)
+                                if (index >= 0) listState.scrollToItem(index)
+                            }
+                        }
+
+                        ChoseGameVersionLayout(
+                            modifier = Modifier
+                                .fadeEdge(state = listState)
+                                .weight(1f, fill = false),
+                            versions = versions,
+                            selectedVersions = selectedVersions,
+                            onVersionSelected = { selectedVersions.add(it) },
+                            onVersionUnSelected = { selectedVersions.remove(it) },
+                            listState = listState
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            FilledTonalButton(
+                                modifier = Modifier.weight(0.5f),
+                                onClick = onDismiss
+                            ) {
+                                MarqueeText(text = stringResource(R.string.generic_cancel))
+                            }
+                            Button(
+                                modifier = Modifier.weight(0.5f),
+                                enabled = selectedVersions.isNotEmpty(),
+                                onClick = { onInstall(selectedVersions.toList()) }
+                            ) {
+                                MarqueeText(text = stringResource(R.string.download_install))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

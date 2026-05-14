@@ -43,6 +43,7 @@ import com.movtery.zalithlauncher.ui.activities.showLauncherCrash
 import com.movtery.zalithlauncher.utils.device.Architecture
 import com.movtery.zalithlauncher.utils.logging.Logger
 import com.movtery.zalithlauncher.utils.logging.Logger.lError
+import com.movtery.zalithlauncher.utils.network.NetworkStateMonitor
 import com.movtery.zalithlauncher.utils.writeCrashFile
 import com.tencent.mmkv.MMKV
 import dagger.hilt.android.HiltAndroidApp
@@ -87,6 +88,9 @@ class ZLApplication : Application(), SingletonImageLoader.Factory {
             loadAllSettings(this)
 
             Logger.initialize(this)
+
+            // 初始化网络状态监听
+            NetworkStateMonitor.init(this)
 
             initializeData()
             PathManager.DIR_FILES_PRIVATE = getDir("files", MODE_PRIVATE)

@@ -191,4 +191,9 @@ sealed interface NormalNavKey : TitledNavKey {
     @Serializable data class License(
         val raw: Int
     ): NormalNavKey
+
+    /** 下载历史屏幕 */
+    @Serializable data object DownloadHistory : NormalNavKey {
+        override val title: Int = R.string.download_history_title
+    }
 }
