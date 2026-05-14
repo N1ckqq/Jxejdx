@@ -62,7 +62,7 @@ object GameTimeTracker {
         val versions: MutableMap<String, VersionPlayTime> = mutableMapOf()
     )
 
-    private fun getDataFile(): File = File(PathManager.DIR_DATA, "play_time.json")
+    private fun getDataFile(): File = File(PathManager.DIR_CACHE, "play_time.json")
 
     private fun loadData(): PlayTimeData {
         val file = getDataFile()

@@ -29,7 +29,7 @@ import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.game.version.installed.VersionFolders
 import com.movtery.zalithlauncher.game.version.installed.VersionsManager
 import com.movtery.zalithlauncher.path.PathManager
-import com.movtery.zalithlauncher.utils.file.computeSHA1
+import com.movtery.zalithlauncher.utils.file.calculateFileSha1
 import com.movtery.zalithlauncher.utils.logging.Logger.lInfo
 import com.movtery.zalithlauncher.utils.logging.Logger.lWarning
 import kotlinx.coroutines.Dispatchers
@@ -132,7 +132,7 @@ object ModUpdateChecker {
 
         for (modFile in modsToCheck) {
             try {
-                val sha1 = modFile.computeSHA1()
+                val sha1 = calculateFileSha1(modFile)
                 val platformVersion = getVersionByLocalFile(modFile, sha1)
 
                 if (platformVersion != null) {
