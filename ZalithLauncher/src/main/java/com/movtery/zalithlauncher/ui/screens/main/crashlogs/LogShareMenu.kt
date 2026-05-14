@@ -52,7 +52,8 @@ fun LogShareMenu(
     onView: () -> Unit,
     onShare: () -> Unit,
     canUpload: Boolean,
-    onUpload: () -> Unit
+    onUpload: () -> Unit,
+    onAnalyze: (() -> Unit)? = null
 ) {
     when (operation) {
         is LogShareMenuOperation.None -> {}
@@ -119,6 +120,27 @@ fun LogShareMenu(
                             Icon(
                                 painter = painterResource(R.drawable.ic_link),
                                 contentDescription = null
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(text = stringResource(R.string.crash_link_share_button))
+                        }
+                        //分析崩溃日志
+                        if (onAnalyze != null) {
+                            Button(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    onAnalyze()
+                                    onChange(LogShareMenuOperation.None)
+                                }
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_chat_info),
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(text = "Analyze Crash")
+                            }
+                        }
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(text = stringResource(R.string.crash_link_share_button))

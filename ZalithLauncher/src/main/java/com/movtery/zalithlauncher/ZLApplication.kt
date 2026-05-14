@@ -90,6 +90,16 @@ class ZLApplication : Application(), SingletonImageLoader.Factory {
 
             initializeData()
             PathManager.DIR_FILES_PRIVATE = getDir("files", MODE_PRIVATE)
+
+            // Check for mod updates in background if needed
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                if (com.movtery.zalithlauncher.game.version.mod.update.ModUpdateChecker.shouldCheck()) {
+                    runCatching {
+                        com.movtery.zalithlauncher.game.version.mod.update.ModUpdateChecker.checkForUpdates(this@ZLApplication)
+                    }
+                }
+            }
+
             DEVICE_ARCHITECTURE = Architecture.getDeviceArchitecture()
             //Force x86 lib directory for Asus x86 based zenfones
             if (Architecture.isx86Device() && Architecture.is32BitsDevice) {

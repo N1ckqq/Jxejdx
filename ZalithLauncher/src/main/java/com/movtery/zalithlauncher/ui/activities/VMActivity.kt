@@ -71,6 +71,7 @@ import com.movtery.zalithlauncher.game.input.LWJGLCharSender
 import com.movtery.zalithlauncher.game.keycodes.LwjglGlfwKeycode
 import com.movtery.zalithlauncher.game.launch.GameLauncher
 import com.movtery.zalithlauncher.game.launch.GameService
+import com.movtery.zalithlauncher.game.launch.GameTimeTracker
 import com.movtery.zalithlauncher.game.launch.JvmLaunchInfo
 import com.movtery.zalithlauncher.game.launch.JvmLauncher
 import com.movtery.zalithlauncher.game.launch.Launcher
@@ -174,10 +175,16 @@ class VMViewModel : ViewModel() {
                 val version: Version = bundle.getParcelableSafely(INTENT_VERSION, Version::class.java)
                     ?: throw IllegalStateException("No launch version has been set.")
 
+                // Start game time tracking
+                GameTimeTracker.startSession(version.getVersionName())
+
                 val launcher = GameLauncher(
                     activity = activity,
                     version = version,
                     onExit = { code, isSignal ->
+                        // End game time tracking
+                        GameTimeTracker.endSession()
+
                         if (code == 0) {
                             val finishedCount = AllSettings.finishedGame.getValue()
                             if (finishedCount < Int.MAX_VALUE)  {

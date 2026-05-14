@@ -19,6 +19,7 @@
 package com.movtery.zalithlauncher.ui.screens.content.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.movtery.zalithlauncher.R
 import com.movtery.zalithlauncher.game.plugin.driver.Driver
 import com.movtery.zalithlauncher.game.plugin.driver.DriverPluginManager
+import com.movtery.zalithlauncher.game.renderer.RendererBenchmark
 import com.movtery.zalithlauncher.game.renderer.RendererInterface
 import com.movtery.zalithlauncher.game.renderer.Renderers
 import com.movtery.zalithlauncher.game.version.installed.GraphicsApi
@@ -199,6 +202,65 @@ fun RendererSettingsScreen(
                         title = stringResource(R.string.settings_renderer_full_screen_title),
                         summary = stringResource(R.string.settings_renderer_full_screen_summary)
                     )
+                }
+            }
+
+            // Renderer Benchmark Button
+            AnimatedItem(scope) { yOffset ->
+                val benchContext = LocalContext.current
+                var benchmarkRunning by remember { mutableStateOf(false) }
+                var benchmarkResult by remember { mutableStateOf<String?>(null) }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(x = 0, y = yOffset.roundToPx()) },
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    onClick = {
+                        if (!benchmarkRunning) {
+                            benchmarkRunning = true
+                            benchmarkResult = null
+                            kotlinx.coroutines.MainScope().launch {
+                                val report = RendererBenchmark.runBenchmark(benchContext)
+                                val best = report.results.firstOrNull()
+                                benchmarkResult = if (best != null) {
+                                    "GPU: ${report.deviceGpuInfo}\nBest: ${best.rendererName} (score: ${best.score}, ~${best.estimatedFps} FPS)"
+                                } else {
+                                    "Benchmark completed. Score: ${report.baselineScore}"
+                                }
+                                benchmarkRunning = false
+                            }
+                        }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_autorenew),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = if (benchmarkRunning) "Running benchmark..." else "Run Renderer Benchmark",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        benchmarkResult?.let { result ->
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = result,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
                 }
             }
 
