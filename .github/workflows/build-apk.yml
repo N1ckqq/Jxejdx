@@ -2,7 +2,7 @@ name: Build APK & Release
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/dependency-checkboxes-auto-download ]
   workflow_dispatch:
 
 permissions:
