@@ -856,6 +856,10 @@ public class GLFW
             mGLFWInitialTime = (double) System.nanoTime();
             long __functionAddress = Functions.Init;
             isGLFWReady = invokeI(__functionAddress) != 0;
+            // Apply the display refresh rate that was set by the launcher before JVM launch.
+            // This is safe to call here: sDisplayRefreshRate is set in ZLApplication.onCreate()
+            // before the game JVM starts, and mGLFWVideoMode is initialised in the static block.
+            updateVideoModeRefreshRate();
         }
         return isGLFWReady;
     }

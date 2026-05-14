@@ -60,7 +60,6 @@ import com.movtery.zalithlauncher.utils.logging.Logger.lWarning
 import com.movtery.zalithlauncher.utils.string.isBiggerTo
 import com.movtery.zalithlauncher.utils.string.isEqualTo
 import org.lwjgl.glfw.CallbackBridge
-import org.lwjgl.glfw.GLFW
 import java.io.File
 import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
@@ -92,8 +91,9 @@ class GameLauncher(
 
         gameManifest = getGameManifest(version, gameManifest = manifest)
         CallbackBridge.nativeSetUseInputStackQueue(gameManifest.arguments != null)
-        // Update GLFW video mode refresh rate with the real display value
-        GLFW.updateVideoModeRefreshRate()
+        // sDisplayRefreshRate is already set in ZLApplication.onCreate() via DisplayManager.
+        // GLFW.updateVideoModeRefreshRate() will be called from within the LWJGL JAR (assets)
+        // when it initialises — no direct call needed here since GLFW is not in the DEX.
 
         val currentAccount = AccountsManager.currentAccountFlow.value!!
         val account = if (version.offlineAccountLogin) {
