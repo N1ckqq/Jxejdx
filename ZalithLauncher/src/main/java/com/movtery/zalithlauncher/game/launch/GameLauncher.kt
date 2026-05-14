@@ -60,6 +60,7 @@ import com.movtery.zalithlauncher.utils.logging.Logger.lWarning
 import com.movtery.zalithlauncher.utils.string.isBiggerTo
 import com.movtery.zalithlauncher.utils.string.isEqualTo
 import org.lwjgl.glfw.CallbackBridge
+import org.lwjgl.glfw.GLFW
 import java.io.File
 import javax.microedition.khronos.egl.EGL10
 import javax.microedition.khronos.egl.EGLConfig
