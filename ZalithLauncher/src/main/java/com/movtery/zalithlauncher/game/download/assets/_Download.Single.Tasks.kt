@@ -23,9 +23,11 @@ import com.movtery.zalithlauncher.R
 import com.movtery.zalithlauncher.coroutine.Task
 import com.movtery.zalithlauncher.coroutine.TaskSystem
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformVersion
+import com.movtery.zalithlauncher.game.download.assets.platform.getVersions
 import com.movtery.zalithlauncher.game.download.assets.platform.mcim.mapMCIMMirrorUrls
 import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.path.PathManager
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.initAll
 import com.movtery.zalithlauncher.utils.file.ensureParentDirectory
 import com.movtery.zalithlauncher.utils.file.formatFileSize
 import com.movtery.zalithlauncher.utils.logging.Logger.lInfo
@@ -182,5 +184,132 @@ fun mapExceptionToMessage(e: Throwable): Pair<Int, Array<Any>?> {
             val errorMessage = e.localizedMessage ?: e::class.simpleName ?: "Unknown error"
             Pair(R.string.error_unknown, arrayOf(errorMessage))
         }
+    }
+}
+
+
+
+/**
+ * 为选中的依赖项目查找兼容版本并下载
+ * 通过主模组版本自动检测 Minecraft 版本和加载器，
+ * 然后在各平台 API 中找到兼容的依赖版本进行下载
+ *
+ * @param mainVersion 主模组的版本信息（用于提取MC版本和加载器信息）
+ * @param dependencies 用户选中的依赖列表
+ * @param targetVersions 要安装到哪些游戏版本
+ * @param folder 版本游戏目录下的相对路径
+ */
+fun downloadDependenciesForVersions(
+    context: Context,
+    mainVersion: PlatformVersion,
+    dependencies: List<PlatformVersion.PlatformDependency>,
+    targetVersions: List<Version>,
+    folder: String,
+    submitError: (ErrorViewModel.ThrowableMessage) -> Unit
+) {
+    // 从主模组版本中获取MC版本和加载器信息
+    val mcVersions = mainVersion.platformGameVersion()
+    val loaders = mainVersion.platformLoaders().map { it.getDisplayName().lowercase() }
+
+    if (mcVersions.isEmpty()) {
+        lWarning("Cannot determine Minecraft version from the main mod version, skipping dependency download.")
+        return
+    }
+
+    TaskSystem.submitTask(
+        Task.runTask(
+            id = "deps_${mainVersion.platformSha1() ?: mainVersion.platformFileName()}",
+            task = { task ->
+                task.updateProgress(-1f, R.string.download_assets_deps_resolving)
+
+                for (dependency in dependencies) {
+                    try {
+                        // 获取依赖项目的所有版本
+                        val allVersions = getVersions(
+                            projectID = dependency.projectId,
+                            platform = dependency.platform
+                        )
+
+                        // 初始化所有版本
+                        val initializedVersions = allVersions.initAll(dependency.projectId)
+
+                        // 根据MC版本和加载器筛选兼容版本
+                        val compatibleVersion = findCompatibleVersion(
+                            versions = initializedVersions,
+                            mcVersions = mcVersions,
+                            loaders = loaders
+                        )
+
+                        if (compatibleVersion != null) {
+                            lInfo("Found compatible dependency version: ${compatibleVersion.platformFileName()} for project ${dependency.projectId}")
+
+                            // 下载兼容的依赖版本
+                            downloadSingleForVersions(
+                                context = context,
+                                version = compatibleVersion,
+                                versions = targetVersions,
+                                folder = folder,
+                                submitError = submitError
+                            )
+                        } else {
+                            lWarning("No compatible version found for dependency project: ${dependency.projectId}")
+                            submitError(
+                                ErrorViewModel.ThrowableMessage(
+                                    title = context.getString(R.string.download_assets_deps_not_found_title),
+                                    message = context.getString(R.string.download_assets_deps_not_found_message, dependency.projectId)
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        lWarning("Failed to resolve dependency: ${dependency.projectId}", e)
+                        val message = mapExceptionToMessage(e).let { pair ->
+                            val args = pair.second
+                            if (args != null) {
+                                context.getString(pair.first, *args)
+                            } else {
+                                context.getString(pair.first)
+                            }
+                        }
+                        submitError(
+                            ErrorViewModel.ThrowableMessage(
+                                title = context.getString(R.string.download_assets_deps_failed_title),
+                                message = message
+                            )
+                        )
+                    }
+                }
+            },
+            onError = { e ->
+                lWarning("An error occurred while resolving dependencies.", e)
+            }
+        )
+    )
+}
+
+/**
+ * 从版本列表中查找与目标MC版本和加载器兼容的最佳版本
+ * 优先匹配同时满足MC版本和加载器的版本，若找不到则只匹配MC版本
+ */
+private fun findCompatibleVersion(
+    versions: List<PlatformVersion>,
+    mcVersions: Array<String>,
+    loaders: List<String>
+): PlatformVersion? {
+    // 优先：同时匹配MC版本和加载器
+    if (loaders.isNotEmpty()) {
+        val exactMatch = versions.firstOrNull { version ->
+            val versionMcVersions = version.platformGameVersion()
+            val versionLoaders = version.platformLoaders().map { it.getDisplayName().lowercase() }
+            val mcMatch = mcVersions.any { mc -> versionMcVersions.contains(mc) }
+            val loaderMatch = loaders.any { loader -> versionLoaders.contains(loader) }
+            mcMatch && loaderMatch
+        }
+        if (exactMatch != null) return exactMatch
+    }
+
+    // 回退：只匹配MC版本
+    return versions.firstOrNull { version ->
+        val versionMcVersions = version.platformGameVersion()
+        mcVersions.any { mc -> versionMcVersions.contains(mc) }
     }
 }

@@ -95,7 +95,8 @@ sealed interface DownloadSingleOperation {
     data class Install(
         val classes: PlatformClasses,
         val version: PlatformVersion,
-        val versions: List<Version>
+        val versions: List<Version>,
+        val selectedDependencies: List<PlatformVersion.PlatformDependency>
     ) : DownloadSingleOperation
 }
 
@@ -103,7 +104,7 @@ sealed interface DownloadSingleOperation {
 fun DownloadSingleOperation(
     operation: DownloadSingleOperation,
     changeOperation: (DownloadSingleOperation) -> Unit,
-    doInstall: (PlatformClasses, PlatformVersion, List<Version>) -> Unit,
+    doInstall: (PlatformClasses, PlatformVersion, List<Version>, List<PlatformVersion.PlatformDependency>) -> Unit,
     onDependencyClicked: (PlatformVersion.PlatformDependency, PlatformClasses) -> Unit = { _, _ -> }
 ) {
     when (operation) {
@@ -138,8 +139,8 @@ fun DownloadSingleOperation(
                 onDismiss = {
                     changeOperation(DownloadSingleOperation.None)
                 },
-                onInstall = { versions ->
-                    changeOperation(DownloadSingleOperation.Install(classes, operation.version, versions))
+                onInstall = { versions, selectedDeps ->
+                    changeOperation(DownloadSingleOperation.Install(classes, operation.version, versions, selectedDeps))
                 },
                 onDependencyClicked = { dependency, classes ->
                     changeOperation(DownloadSingleOperation.None)
@@ -148,7 +149,7 @@ fun DownloadSingleOperation(
             )
         }
         is DownloadSingleOperation.Install -> {
-            doInstall(operation.classes, operation.version, operation.versions)
+            doInstall(operation.classes, operation.version, operation.versions, operation.selectedDependencies)
             changeOperation(DownloadSingleOperation.None)
         }
     }
@@ -159,7 +160,7 @@ private fun DownloadDialog(
     dependencyProjects: List<Pair<PlatformVersion.PlatformDependency, PlatformProject>>,
     classes: PlatformClasses,
     onDismiss: () -> Unit,
-    onInstall: (List<Version>) -> Unit,
+    onInstall: (List<Version>, List<PlatformVersion.PlatformDependency>) -> Unit,
     onDependencyClicked: (PlatformVersion.PlatformDependency, PlatformClasses) -> Unit
 ) {
     val versions = remember { VersionsManager.versions.filter { it.isValid() } }
@@ -185,6 +186,13 @@ private fun DownloadDialog(
             dependencyProjects.filter { it.first.type == PlatformDependencyType.OPTIONAL }
         }
         val hasDeps = dependencies.isNotEmpty() || optionals.isNotEmpty()
+
+        // 选中的依赖项列表（REQUIRED默认勾选，OPTIONAL默认不勾选）
+        val selectedDependencies = remember(dependencyProjects) {
+            mutableStateListOf<PlatformVersion.PlatformDependency>().apply {
+                addAll(dependencies.map { it.first })
+            }
+        }
 
         Dialog(
             onDismissRequest = onDismiss,
@@ -237,6 +245,16 @@ private fun DownloadDialog(
                                             list = dependencies,
                                             titleRes = R.string.download_assets_dependency_projects,
                                             defaultClasses = classes,
+                                            selectedDependencies = selectedDependencies,
+                                            onDependencyCheckedChange = { dep, checked ->
+                                                if (checked) {
+                                                    if (!selectedDependencies.contains(dep)) {
+                                                        selectedDependencies.add(dep)
+                                                    }
+                                                } else {
+                                                    selectedDependencies.remove(dep)
+                                                }
+                                            },
                                             onDependencyClicked = onDependencyClicked
                                         )
                                     }
@@ -245,6 +263,16 @@ private fun DownloadDialog(
                                             list = optionals,
                                             titleRes = R.string.download_assets_optional_projects,
                                             defaultClasses = classes,
+                                            selectedDependencies = selectedDependencies,
+                                            onDependencyCheckedChange = { dep, checked ->
+                                                if (checked) {
+                                                    if (!selectedDependencies.contains(dep)) {
+                                                        selectedDependencies.add(dep)
+                                                    }
+                                                } else {
+                                                    selectedDependencies.remove(dep)
+                                                }
+                                            },
                                             onDependencyClicked = onDependencyClicked
                                         )
                                     }
@@ -302,7 +330,7 @@ private fun DownloadDialog(
                                 modifier = Modifier.weight(0.5f),
                                 onClick = {
                                     if (selectedVersions.isNotEmpty()) {
-                                        onInstall(selectedVersions)
+                                        onInstall(selectedVersions, selectedDependencies.toList())
                                     }
                                 }
                             ) {
@@ -399,6 +427,8 @@ private fun LazyListScope.dependencyLayout(
     list: List<Pair<PlatformVersion.PlatformDependency, PlatformProject>>,
     titleRes: Int,
     defaultClasses: PlatformClasses,
+    selectedDependencies: List<PlatformVersion.PlatformDependency>,
+    onDependencyCheckedChange: (PlatformVersion.PlatformDependency, Boolean) -> Unit,
     onDependencyClicked: (PlatformVersion.PlatformDependency, PlatformClasses) -> Unit
 ) {
     if (list.isNotEmpty()) {
@@ -410,9 +440,14 @@ private fun LazyListScope.dependencyLayout(
         }
         //前置项目列表
         items(list) { (dependency, dependencyProject) ->
+            val isChecked = selectedDependencies.contains(dependency)
             AssetsVersionDependencyItem(
                 modifier = Modifier.fillMaxWidth(),
                 project = dependencyProject,
+                checked = isChecked,
+                onCheckedChange = { checked ->
+                    onDependencyCheckedChange(dependency, checked)
+                },
                 onClick = {
                     onDependencyClicked(dependency, dependencyProject.platformClasses(defaultClasses))
                 }
@@ -425,6 +460,8 @@ private fun LazyListScope.dependencyLayout(
 private fun AssetsVersionDependencyItem(
     modifier: Modifier = Modifier,
     project: PlatformProject,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit = {},
     shape: Shape = MaterialTheme.shapes.large,
     color: Color = itemColor(false),
@@ -444,18 +481,24 @@ private fun AssetsVersionDependencyItem(
         contentColor = contentColor,
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
             AssetsIcon(
                 modifier = Modifier
-                    .padding(all = 8.dp)
+                    .padding(vertical = 8.dp)
                     .clip(shape = RoundedCornerShape(10.dp)),
                 size = 48.dp,
                 iconUrl = iconUrl
             )
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 4.dp)
             ) {
                 ProjectTitleHead(
                     platform = platform,
