@@ -20,7 +20,7 @@ package com.movtery.zalithlauncher.ui.screens.content.settings
 
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.rememberCoroutineScopeimport androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,8 +59,7 @@ import com.movtery.zalithlauncher.contract.MediaPickerContract
 import com.movtery.zalithlauncher.coroutine.Task
 import com.movtery.zalithlauncher.coroutine.TaskSystem
 import com.movtery.zalithlauncher.path.PathManager
-import com.movtery.zalithlauncher.setting.AllSettings
-import com.movtery.zalithlauncher.setting.enums.AppLanguage
+import com.movtery.zalithlauncher.setting.AllSettingsimport com.movtery.zalithlauncher.setting.enums.AppLanguage
 import com.movtery.zalithlauncher.setting.enums.DarkMode
 import com.movtery.zalithlauncher.setting.enums.HomePageType
 import com.movtery.zalithlauncher.setting.enums.MirrorSourceType
@@ -87,6 +86,7 @@ import com.movtery.zalithlauncher.ui.screens.content.settings.layouts.SwitchSett
 import com.movtery.zalithlauncher.ui.theme.ColorThemeType
 import com.movtery.zalithlauncher.utils.animation.TransitionAnimationType
 import com.movtery.zalithlauncher.utils.file.shareFile
+import com.movtery.zalithlauncher.utils.file.formatFileSize
 import com.movtery.zalithlauncher.utils.isChinaMainland
 import com.movtery.zalithlauncher.utils.logging.Logger
 import com.movtery.zalithlauncher.utils.logging.Logger.lError
@@ -97,6 +97,8 @@ import com.movtery.zalithlauncher.viewmodel.EventViewModel
 import com.movtery.zalithlauncher.viewmodel.LocalBackgroundViewModel
 import com.movtery.zalithlauncher.viewmodel.LocalHomePageViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.apache.commons.io.FileUtils as ApacheFileUtils
 import java.io.File
 
 private sealed interface CustomColorOperation {
@@ -562,6 +564,49 @@ fun LauncherSettingsScreen(
                     )
                 }
             }
+            // 缓存管理板块
+            AnimatedItem(scope) { yOffset ->
+                val coroutineScope = rememberCoroutineScope()
+                var cacheSize by remember { mutableStateOf<Long>(-1L) }
+                var showClearConfirm by remember { mutableStateOf(false) }
+
+                // Calculate cache size on composition
+                LaunchedEffect(Unit) {
+                    cacheSize = calculateCacheSize()
+                }
+
+                if (showClearConfirm) {
+                    SimpleAlertDialog(
+                        title = stringResource(R.string.settings_launcher_cache_clear_title),
+                        text = stringResource(R.string.settings_launcher_cache_clear_confirm),
+                        onConfirm = {
+                            showClearConfirm = false
+                            coroutineScope.launch(Dispatchers.IO) {
+                                clearDownloadCache()
+                                cacheSize = calculateCacheSize()
+                            }
+                        },
+                        onDismiss = { showClearConfirm = false }
+                    )
+                }
+
+                SettingsCardColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(x = 0, y = yOffset.roundToPx()) }
+                ) {
+                    SettingsCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        position = CardPosition.Single,
+                        title = stringResource(R.string.settings_launcher_cache_clear_title),
+                        summary = if (cacheSize >= 0)
+                            stringResource(R.string.settings_launcher_cache_size, formatFileSize(cacheSize))
+                        else
+                            stringResource(R.string.settings_launcher_cache_size_calculating),
+                        onClick = { showClearConfirm = true }
+                    )
+                }
+            }
         }
     }
 }
@@ -712,4 +757,22 @@ private fun BackgroundOperation(
             }
         }
     }
+}
+
+
+private fun calculateCacheSize(): Long {
+    val cacheDir = PathManager.DIR_CACHE
+    return if (cacheDir.exists()) {
+        ApacheFileUtils.sizeOfDirectory(cacheDir)
+    } else 0L
+}
+
+private fun clearDownloadCache() {
+    // 只清理资源下载缓存，不清理图片缓存等运行时缓存
+    val assetsCacheDir = File(PathManager.DIR_CACHE, "assets")
+    ApacheFileUtils.deleteQuietly(assetsCacheDir)
+    ApacheFileUtils.deleteQuietly(PathManager.DIR_CACHE_GAME_DOWNLOADER)
+    ApacheFileUtils.deleteQuietly(PathManager.DIR_CACHE_MODPACK_DOWNLOADER)
+    ApacheFileUtils.deleteQuietly(PathManager.DIR_CACHE_MOD_UPDATER)
+    ApacheFileUtils.deleteQuietly(PathManager.DIR_CACHE_MODPACK_EXPORTER)
 }

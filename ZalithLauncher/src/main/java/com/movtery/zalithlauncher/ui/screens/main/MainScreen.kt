@@ -111,6 +111,7 @@ import com.movtery.zalithlauncher.ui.theme.onCardColor
 import com.movtery.zalithlauncher.utils.animation.getAnimateTween
 import com.movtery.zalithlauncher.utils.festival.LocalFestivals
 import com.movtery.zalithlauncher.utils.file.formatFileSize
+import com.movtery.zalithlauncher.utils.network.NetworkStateMonitor
 import com.movtery.zalithlauncher.viewmodel.ErrorViewModel
 import com.movtery.zalithlauncher.viewmodel.EventViewModel
 import com.movtery.zalithlauncher.viewmodel.LocalBackgroundViewModel
@@ -126,6 +127,7 @@ fun MainScreen(
     submitError: (ErrorViewModel.ThrowableMessage) -> Unit
 ) {
     val tasks by TaskSystem.tasksFlow.collectAsStateWithLifecycle()
+    val isOnline by NetworkStateMonitor.isOnline.collectAsStateWithLifecycle()
 
     //监控当前是否有任务正在进行
     LaunchedEffect(tasks) {
@@ -175,6 +177,7 @@ fun MainScreen(
                 inLauncherScreen = inLauncherScreen,
                 taskRunning = tasks.isEmpty(),
                 isTasksExpanded = isTaskMenuExpanded,
+                isOnline = isOnline,
                 contentColor = onBackgroundColor(),
                 onScreenBack = {
                     screenBackStackModel.mainScreen.backStack.removeFirstOrNull()
@@ -199,6 +202,39 @@ fun MainScreen(
                     changeTasksExpandedState()
                 },
             )
+
+            // 离线提示横幅
+            AnimatedVisibility(
+                visible = !isOnline,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_warning_outlined),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .padding(end = 4.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.offline_banner_message),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -236,6 +272,7 @@ private fun <E: TitledNavKey> TopBar(
     inLauncherScreen: Boolean,
     taskRunning: Boolean,
     isTasksExpanded: Boolean,
+    isOnline: Boolean,
     modifier: Modifier = Modifier,
     contentColor: Color,
     onScreenBack: () -> Unit,
@@ -402,10 +439,9 @@ private fun <E: TitledNavKey> TopBar(
                     painter = painterResource(R.drawable.ic_download_2_filled),
                     text = stringResource(R.string.generic_download),
                     onClick = {
-                        if (!inDownloadScreen) toDownloadScreen()
+                        if (!inDownloadScreen && isOnline) toDownloadScreen()
                     },
                 )
-
                 TopBarRailItem(
                     selected = inSettingsScreen,
                     painter = painterResource(R.drawable.ic_settings_filled),

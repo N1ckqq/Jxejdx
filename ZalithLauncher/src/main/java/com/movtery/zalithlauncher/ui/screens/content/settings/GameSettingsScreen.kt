@@ -64,6 +64,7 @@ import com.movtery.zalithlauncher.ui.screens.content.settings.layouts.StringList
 import com.movtery.zalithlauncher.ui.screens.content.settings.layouts.SwitchSettingsCard
 import com.movtery.zalithlauncher.ui.screens.content.settings.layouts.TextInputSettingsCard
 import com.movtery.zalithlauncher.utils.platform.getMaxMemoryForSettings
+import com.movtery.zalithlauncher.utils.platform.getRecommendedMemoryForSettings
 import com.movtery.zalithlauncher.viewmodel.EventViewModel
 import com.movtery.zalithlauncher.viewmodel.sendDLPlugin
 
@@ -209,12 +210,15 @@ fun GameSettingsScreen(
                         )
                     }
 
+                    val context = LocalContext.current
+                    val recommendedRam = remember { getRecommendedMemoryForSettings(context) }
+
                     IntSliderSettingsCard(
                         modifier = Modifier.fillMaxWidth(),
                         position = CardPosition.Middle,
                         unit = AllSettings.ramAllocation,
                         title = stringResource(R.string.settings_game_java_memory_title),
-                        summary = stringResource(R.string.settings_game_java_memory_summary),
+                        summary = stringResource(R.string.settings_game_java_memory_summary_with_recommendation, recommendedRam),
                         valueRange = AllSettings.ramAllocation.floatRange.start..getMaxMemoryForSettings(LocalContext.current).toFloat(),
                         suffix = "MB",
                         fineTuningControl = true,

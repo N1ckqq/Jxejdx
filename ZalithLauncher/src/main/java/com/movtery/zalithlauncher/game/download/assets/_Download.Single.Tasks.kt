@@ -22,9 +22,11 @@ import android.content.Context
 import com.movtery.zalithlauncher.R
 import com.movtery.zalithlauncher.coroutine.Task
 import com.movtery.zalithlauncher.coroutine.TaskSystem
+import com.movtery.zalithlauncher.database.AppDatabase
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformVersion
 import com.movtery.zalithlauncher.game.download.assets.platform.getVersions
 import com.movtery.zalithlauncher.game.download.assets.platform.mcim.mapMCIMMirrorUrls
+import com.movtery.zalithlauncher.game.download.history.DownloadRecord
 import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.path.PathManager
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.initAll
@@ -38,6 +40,8 @@ import com.movtery.zalithlauncher.viewmodel.ErrorViewModel
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.ResponseException
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okio.IOException
 import org.apache.commons.io.FileUtils
 import java.io.File
@@ -75,6 +79,20 @@ fun downloadSingleForVersions(
                 if (targetFile.exists() && !targetFile.delete()) throw IOException("Failed to properly delete the existing target file.")
                 cacheFile.copyTo(targetFile)
                 onFileCopied(targetFile, targetFolder) //文件已复制回调
+            }
+            // 记录下载历史
+            runCatching {
+                val db = AppDatabase.getInstance(context)
+                val record = DownloadRecord(
+                    fileName = version.platformFileName(),
+                    platform = version.platform().name,
+                    projectId = "",
+                    fileSize = version.platformFileSize(),
+                    installedVersions = versions.joinToString(",") { it.getVersionName() }
+                )
+                withContext(Dispatchers.IO) {
+                    db.downloadRecordDao().insert(record)
+                }
             }
         },
         onError = { e ->
@@ -289,15 +307,19 @@ fun downloadDependenciesForVersions(
 /**
  * 从版本列表中查找与目标MC版本和加载器兼容的最佳版本
  * 优先匹配同时满足MC版本和加载器的版本，若找不到则只匹配MC版本
+ * 在匹配的候选中选择发布日期最新的版本
  */
 private fun findCompatibleVersion(
     versions: List<PlatformVersion>,
     mcVersions: Array<String>,
     loaders: List<String>
 ): PlatformVersion? {
+    // 按发布时间降序排列（最新在前）
+    val sortedVersions = versions.sortedByDescending { it.platformDatePublished() }
+
     // 优先：同时匹配MC版本和加载器
     if (loaders.isNotEmpty()) {
-        val exactMatch = versions.firstOrNull { version ->
+        val exactMatch = sortedVersions.firstOrNull { version ->
             val versionMcVersions = version.platformGameVersion()
             val versionLoaders = version.platformLoaders().map { it.getDisplayName().lowercase() }
             val mcMatch = mcVersions.any { mc -> versionMcVersions.contains(mc) }
@@ -307,9 +329,85 @@ private fun findCompatibleVersion(
         if (exactMatch != null) return exactMatch
     }
 
-    // 回退：只匹配MC版本
-    return versions.firstOrNull { version ->
+    // 回退：只匹配MC版本（仍选最新）
+    return sortedVersions.firstOrNull { version ->
         val versionMcVersions = version.platformGameVersion()
         mcVersions.any { mc -> versionMcVersions.contains(mc) }
     }
+}
+
+
+
+/**
+ * 批量下载选中的模组到指定游戏版本列表
+ * 对每个模组自动获取最新兼容版本并下载
+ *
+ * @param mods 要批量下载的模组列表 (platform + projectId)
+ * @param targetVersions 安装目标游戏版本列表
+ * @param folder 版本游戏目录下的相对路径
+ */
+fun downloadBatchMods(
+    context: Context,
+    mods: List<com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.SelectedMod>,
+    targetVersions: List<Version>,
+    folder: String,
+    submitError: (ErrorViewModel.ThrowableMessage) -> Unit
+) {
+    if (mods.isEmpty() || targetVersions.isEmpty()) return
+
+    TaskSystem.submitTask(
+        Task.runTask(
+            id = "batch_mods_${System.currentTimeMillis()}",
+            task = { task ->
+                task.updateProgress(-1f, R.string.download_assets_deps_resolving)
+
+                for (mod in mods) {
+                    try {
+                        val allVersions = getVersions(
+                            projectID = mod.projectId,
+                            platform = mod.platform
+                        )
+                        val initializedVersions = allVersions.initAll(mod.projectId)
+
+                        // 取最新版本（列表已按日期降序排列）
+                        val latest = initializedVersions.maxByOrNull { it.platformDatePublished() }
+                        if (latest != null) {
+                            lInfo("Batch download: found latest version ${latest.platformFileName()} for ${mod.projectId}")
+                            downloadSingleForVersions(
+                                context = context,
+                                version = latest,
+                                versions = targetVersions,
+                                folder = folder,
+                                submitError = submitError
+                            )
+                        } else {
+                            lWarning("Batch download: no versions found for ${mod.projectId}")
+                            submitError(
+                                ErrorViewModel.ThrowableMessage(
+                                    title = context.getString(R.string.download_assets_deps_not_found_title),
+                                    message = context.getString(R.string.download_assets_deps_not_found_message, mod.projectId)
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        lWarning("Batch download: failed for ${mod.projectId}", e)
+                        val message = mapExceptionToMessage(e).let { pair ->
+                            val args = pair.second
+                            if (args != null) context.getString(pair.first, *args)
+                            else context.getString(pair.first)
+                        }
+                        submitError(
+                            ErrorViewModel.ThrowableMessage(
+                                title = context.getString(R.string.download_assets_deps_failed_title),
+                                message = message
+                            )
+                        )
+                    }
+                }
+            },
+            onError = { e ->
+                lWarning("An error occurred during batch mod download.", e)
+            }
+        )
+    )
 }

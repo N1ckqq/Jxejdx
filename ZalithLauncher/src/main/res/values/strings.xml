@@ -231,6 +231,14 @@
     <string name="download_assets_batch_select_all">Select All</string>
     <string name="download_assets_batch_deselect_all">Deselect All</string>
     <string name="download_assets_batch_download">Download %d mod(s)</string>
+    <string name="download_mods_batch_selected">%d mod(s) selected</string>
+    <string name="download_mods_batch_install_for_versions">Install %d mod(s) for versions</string>
+    <string name="download_history_title">Download History</string>
+    <string name="download_history_empty">No download history yet</string>
+    <string name="download_history_clear_title">Clear History</string>
+    <string name="download_history_clear_confirm">Are you sure you want to clear all download history? This cannot be undone.</string>
+    <string name="download_history_installed_for">Installed for: %s</string>
+    <string name="offline_banner_message">No internet connection — download features unavailable</string>
     <string name="download_assets_batch_close_selection">Close Selection</string>
     <string name="download_assets_failed_to_get_result">Failed to get search results: %s. Tap to retry.</string>
     <string name="download_assets_failed_to_get_project">Failed to retrieve project information: %s. Tap to retry.</string>
@@ -883,6 +891,7 @@
     <string name="settings_game_java_runtime_summary">Specify the default Java environment to use</string>
     <string name="settings_game_java_memory_title">Memory Allocation</string>
     <string name="settings_game_java_memory_summary">Adjust Minecraft\'s memory usage</string>
+    <string name="settings_game_java_memory_summary_with_recommendation">Adjust Minecraft\'s memory usage. Recommended for this device: %d MB</string>
     <string name="settings_game_java_memory_used_text">Used: %1$dMB / %2$dMB</string>
     <string name="settings_game_java_memory_allocation_text">Allocated: %dMB</string>
     <string name="settings_game_native_lib_plugin_title">Native Library Plugins</string>
@@ -1024,6 +1033,10 @@
     <string name="settings_launcher_log_share_title">Share Launcher Logs</string>
     <string name="settings_launcher_log_share_summary">Tap to share the launcher log files, so developers can identify and fix issues with the launcher</string>
     <string name="settings_launcher_log_share_packing">Package launcher log files</string>
+    <string name="settings_launcher_cache_clear_title">Clear Download Cache</string>
+    <string name="settings_launcher_cache_size">Cache size: %s — tap to clear</string>
+    <string name="settings_launcher_cache_size_calculating">Calculating cache size…</string>
+    <string name="settings_launcher_cache_clear_confirm">Are you sure you want to clear the download cache? Downloaded game files, mods and modpacks in cache will be removed. Installed files will not be affected.</string>
     <string name="settings_launcher_mirror_modloader_title">Mod Loader Version Source</string>
     <string name="settings_launcher_mirror_file_download_title">File Download Source</string>
     <string name="settings_launcher_mirror_assets_search_title">Asset Platform Search Source</string>

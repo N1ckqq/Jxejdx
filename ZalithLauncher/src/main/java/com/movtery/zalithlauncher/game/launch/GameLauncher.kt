@@ -91,6 +91,8 @@ class GameLauncher(
 
         gameManifest = getGameManifest(version, gameManifest = manifest)
         CallbackBridge.nativeSetUseInputStackQueue(gameManifest.arguments != null)
+        // Update GLFW video mode refresh rate with the real display value
+        org.lwjgl.glfw.GLFW.updateVideoModeRefreshRate()
 
         val currentAccount = AccountsManager.currentAccountFlow.value!!
         val account = if (version.offlineAccountLogin) {

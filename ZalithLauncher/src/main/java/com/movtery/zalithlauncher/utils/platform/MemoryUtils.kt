@@ -87,3 +87,17 @@ fun Long.bytesToMB(decimals: Int = 2, roundDown: Boolean = false): Double {
         BigDecimal(megaBytes).setScale(decimals, roundingMode).toDouble()
     }
 }
+
+
+/**
+ * 计算 Minecraft 推荐的内存分配值（单位 MB）
+ * 推荐值 = 总内存的 50%，但不超过最大可设置值
+ */
+@WorkerThread
+fun getRecommendedMemoryForSettings(context: Context): Int {
+    val totalMb = getTotalMemory(context).bytesToMB(decimals = 0, roundDown = true).toInt()
+    val maxMb = getMaxMemoryForSettings(context)
+    // 50% of total RAM, clamped to [512, maxMb]
+    val recommended = (totalMb * 0.5).toInt().coerceIn(512, maxMb)
+    return recommended
+}
