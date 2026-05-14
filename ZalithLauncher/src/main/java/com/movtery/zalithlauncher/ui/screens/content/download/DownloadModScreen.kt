@@ -46,6 +46,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.movtery.zalithlauncher.R
 import com.movtery.zalithlauncher.game.download.assets.downloadSingleForVersions
+import com.movtery.zalithlauncher.game.download.assets.downloadDependenciesForVersions
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformClasses
 import com.movtery.zalithlauncher.ui.screens.NestedNavKey
 import com.movtery.zalithlauncher.ui.screens.NormalNavKey
@@ -87,7 +88,8 @@ fun DownloadModScreen(
     DownloadSingleOperation(
         operation = operation,
         changeOperation = { operation = it },
-        doInstall = { classes, version, gameVersions ->
+        doInstall = { classes, version, gameVersions, selectedDependencies ->
+            // Скачиваем основной мод
             downloadSingleForVersions(
                 context = context,
                 version = version,
@@ -95,6 +97,17 @@ fun DownloadModScreen(
                 folder = classes.versionFolder.folderName,
                 submitError = submitError
             )
+            // Скачиваем выбранные зависимости с автоопределением совместимой версии
+            if (selectedDependencies.isNotEmpty()) {
+                downloadDependenciesForVersions(
+                    context = context,
+                    mainVersion = version,
+                    dependencies = selectedDependencies,
+                    targetVersions = gameVersions,
+                    folder = classes.versionFolder.folderName,
+                    submitError = submitError
+                )
+            }
         },
         onDependencyClicked = { dep, classes ->
             backStack.navigateTo(

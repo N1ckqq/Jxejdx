@@ -255,6 +255,10 @@
     <string name="download_assets_install_progress_downloading">Downloading and installing assets\n%1$s\n (%2$s / %3$s)</string>
     <string name="download_assets_install_progress_installing">Installing assets\n%s</string>
     <string name="download_assets_install_failed">Failed to install assets!</string>
+    <string name="download_assets_deps_resolving">Resolving dependencies…</string>
+    <string name="download_assets_deps_not_found_title">Dependency not found</string>
+    <string name="download_assets_deps_not_found_message">Could not find a compatible version for dependency project: %s</string>
+    <string name="download_assets_deps_failed_title">Failed to resolve dependency</string>
     <string name="download_modpack_warning1">Before installation, you need to understand that most modpacks are made for PC, and there\'s a high chance of crashes or other issues when you try to launch them. These problems are often beyond what the launcher can resolve.</string>
     <string name="download_modpack_warning2">You will need to learn the relevant knowledge to try and resolve the issues yourself, or seek help from others.</string>
     <string name="download_modpack_warning3">Note: The launcher developers typically do not handle issues caused by modpacks.</string>

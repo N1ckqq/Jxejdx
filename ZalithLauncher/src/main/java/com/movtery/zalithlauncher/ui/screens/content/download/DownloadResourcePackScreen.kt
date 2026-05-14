@@ -70,7 +70,7 @@ fun DownloadResourcePackScreen(
     DownloadSingleOperation(
         operation = operation,
         changeOperation = { operation = it },
-        doInstall = { classes, version, versions ->
+        doInstall = { classes, version, versions, _ ->
             downloadSingleForVersions(
                 context = context,
                 version = version,
