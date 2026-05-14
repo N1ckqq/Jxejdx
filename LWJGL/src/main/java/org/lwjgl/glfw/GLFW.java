@@ -4,12 +4,7 @@
  */
 package org.lwjgl.glfw;
 
-import android.content.Context;
-import android.hardware.display.DisplayManager;
 import android.util.*;
-import android.view.Display;
-
-import com.movtery.zalithlauncher.context.ContextsKt;
 
 import java.lang.reflect.*;
 import java.nio.*;
@@ -1035,23 +1030,11 @@ public class GLFW
 
     /**
      * Returns the current display refresh rate in Hz, defaulting to 60 if unavailable.
+     * The value is updated at runtime via CallbackBridge.sDisplayRefreshRate.
      */
     private static int getDisplayRefreshRate() {
-        try {
-            Context ctx = ContextsKt.getGlobalContext();
-            DisplayManager dm = (DisplayManager) ctx.getSystemService(Context.DISPLAY_SERVICE);
-            if (dm != null) {
-                Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
-                if (display != null) {
-                    float rate = display.getRefreshRate();
-                    int rounded = Math.round(rate);
-                    if (rounded > 0) return rounded;
-                }
-            }
-        } catch (Throwable t) {
-            // Fallback to 60 if anything goes wrong
-        }
-        return 60;
+        int rate = CallbackBridge.sDisplayRefreshRate;
+        return rate > 0 ? rate : 60;
     }
 
     // GLFW Window functions

@@ -92,6 +92,15 @@ class ZLApplication : Application(), SingletonImageLoader.Factory {
             // 初始化网络状态监听
             NetworkStateMonitor.init(this)
 
+            // 初始化显示刷新率，供 LWJGL GLFW 使用
+            runCatching {
+                val dm = getSystemService(android.content.Context.DISPLAY_SERVICE)
+                    as android.hardware.display.DisplayManager
+                val display = dm.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+                val rate = display?.refreshRate?.let { Math.round(it) } ?: 60
+                if (rate > 0) org.lwjgl.glfw.CallbackBridge.sDisplayRefreshRate = rate
+            }
+
             initializeData()
             PathManager.DIR_FILES_PRIVATE = getDir("files", MODE_PRIVATE)
             DEVICE_ARCHITECTURE = Architecture.getDeviceArchitecture()

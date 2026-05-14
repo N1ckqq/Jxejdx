@@ -1,6 +1,9 @@
 package org.lwjgl.glfw;
 
 public class CallbackBridge {
+    /** Display refresh rate in Hz, set by ZalithLauncher at startup. Defaults to 60. */
+    public static volatile int sDisplayRefreshRate = 60;
+
     public static final int CLIPBOARD_COPY = 2000;
     public static final int CLIPBOARD_PASTE = 2001;
     
