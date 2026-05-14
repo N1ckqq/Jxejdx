@@ -220,8 +220,8 @@ object AccountsManager {
     }
 
     private fun checkLimit(): Boolean {
-        val circumventLimit = File(PathManager.DIR_FILES_EXTERNAL, "circumventLimit")
-        return !circumventLimit.exists() && !isInGreaterChina() && !hasMicrosoftAccount()
+        // Disabled limit check - allow offline accounts to be selected without restrictions
+        return false
     }
 
     /**
