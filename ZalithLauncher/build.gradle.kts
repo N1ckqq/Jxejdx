@@ -104,6 +104,8 @@ android {
                     val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
                     afterEvaluate {
                         val task = tasks.named("merge${variantName}Assets").get() as MergeSourceSetFolders
+                        // Declare explicit dependency so Gradle knows LWJGL:jar must run before mergeAssets
+                        task.dependsOn(project(":LWJGL").tasks.named("jar"))
                         task.doLast {
                             val arch = System.getProperty("arch", "all")
                             val assetsDir = task.outputDir.get().asFile
