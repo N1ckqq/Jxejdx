@@ -47,6 +47,9 @@ public class CallbackBridge {
     public static final int CLIPBOARD_PASTE = 2001;
     public static final int CLIPBOARD_OPEN = 2002;
     
+    /** Display refresh rate in Hz, set by ZalithLauncher at startup. Defaults to 60. */
+    public static volatile int sDisplayRefreshRate = 60;
+
     public static volatile int windowWidth, windowHeight;
     public static volatile int physicalWidth, physicalHeight;
     public static float mouseX, mouseY;
@@ -281,6 +284,14 @@ public class CallbackBridge {
     }
 
     @Keep @CriticalNative public static native void nativeSetUseInputStackQueue(boolean useInputStackQueue);
+    /** Used by GLFW stub (LWJGL module) to signal input readiness to native layer. */
+    @Keep public static native boolean nativeSetInputReady(boolean ready);
+    /** Used by GLFW stub to set grab state. */
+    @Keep public static native void nativeSetGrabbing(boolean grab);
+    /** Used by GLFW stub to update cursor shape. */
+    @Keep public static native void nativeSetCursorShape(int shape);
+    /** Used by GLFW stub for clipboard operations (COPY/PASTE via byte array). */
+    @Keep public static native String nativeClipboard(int action, byte[] copy);
 
     @Keep @CriticalNative private static native boolean nativeSendChar(char codepoint);
     // GLFW: GLFWCharModsCallback deprecated, but is Minecraft still use?

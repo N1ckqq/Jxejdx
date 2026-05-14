@@ -916,6 +916,11 @@ public class GLFW
         ypos.put(0);
     }
 
+    @Nullable
+    public static String glfwGetMonitorName(@NativeType("GLFWmonitor *") long monitor) {
+        return "Monitor";
+    }
+
     public static void glfwGetMonitorWorkarea(@NativeType("GLFWmonitor *") long monitor, @Nullable @NativeType("int *") IntBuffer xpos, @Nullable @NativeType("int *") IntBuffer ypos, @Nullable @NativeType("int *") IntBuffer width, @Nullable @NativeType("int *") IntBuffer height) {
         if (CHECKS) {
             checkSafe(xpos, 1);
@@ -1076,18 +1081,20 @@ public class GLFW
 
         String pojavRenderer = System.getenv("POJAV_RENDERER");
         // Custom defaults for specific renderers
-        switch (pojavRenderer) {
-            case "vulkan_zink":
-                glMajor = 4;
-                glMinor = 6;
-                break;
-            case "gallium_virgl":
-                glMajor = 4;
-                break;
-            case "opengles3":
-                glMajor = 4;
-                glMinor = 0;
-                break;
+        if (pojavRenderer != null) {
+            switch (pojavRenderer) {
+                case "vulkan_zink":
+                    glMajor = 4;
+                    glMinor = 6;
+                    break;
+                case "gallium_virgl":
+                    glMajor = 4;
+                    break;
+                case "opengles3":
+                    glMajor = 4;
+                    glMinor = 0;
+                    break;
+            }
         }
         win.windowAttribs.put(GLFW_CONTEXT_VERSION_MAJOR, glMajor);
         win.windowAttribs.put(GLFW_CONTEXT_VERSION_MINOR, glMinor);
