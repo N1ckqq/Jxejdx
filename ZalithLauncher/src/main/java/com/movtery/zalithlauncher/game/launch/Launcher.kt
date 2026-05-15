@@ -22,7 +22,6 @@ import android.content.Context
 import android.os.Build
 import android.os.LocaleList
 import android.system.Os
-import android.util.ArrayMap
 import androidx.annotation.CallSuper
 import androidx.compose.ui.unit.IntSize
 import com.movtery.zalithlauncher.bridge.LoggerBridge
@@ -385,7 +384,7 @@ abstract class Launcher(
 
     @CallSuper
     protected open fun initEnv(screenSize: IntSize): MutableMap<String, String> {
-        val envMap: MutableMap<String, String> = ArrayMap()
+        val envMap: MutableMap<String, String> = LinkedHashMap()
         setJavaEnv(
             screenSize = screenSize,
             envMap = { envMap }
@@ -453,7 +452,9 @@ abstract class Launcher(
  */
 fun parseJavaArguments(args: String): List<String> {
     val parsedArguments = mutableListOf<String>()
-    var cleanedArgs = args.trim().replace(" ", "")
+    // WARN-05 fix: не удаляем пробелы глобально — это ломает аргументы со значениями, содержащими пробелы.
+    // Вместо этого работаем с оригинальной строкой, удаляя только ведущие/хвостовые пробелы.
+    var cleanedArgs = args.trim()
     val separators = listOf("-XX:-", "-XX:+", "-XX:", "--", "-D", "-X", "-javaagent:", "-verbose")
 
     for (prefix in separators) {
@@ -468,8 +469,8 @@ fun parseJavaArguments(args: String): List<String> {
                 }
                 .minOrNull() ?: cleanedArgs.length
 
-            val parsedSubstring = cleanedArgs.substring(start, end)
-            cleanedArgs = cleanedArgs.replace(parsedSubstring, "")
+            val parsedSubstring = cleanedArgs.substring(start, end).trim()
+            cleanedArgs = cleanedArgs.removeRange(start, end)
 
             if (parsedSubstring.indexOf('=') == parsedSubstring.lastIndexOf('=')) {
                 val last = parsedArguments.lastOrNull()

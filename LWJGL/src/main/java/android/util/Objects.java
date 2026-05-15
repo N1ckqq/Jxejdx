@@ -17,6 +17,12 @@ package android.util;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+/**
+ * WARN-01: Этот класс намеренно находится в пакете android.util для предоставления
+ * совместимости с Android API в окружении LWJGL desktop.
+ * Он перекрывает системный android.util.Objects — это ожидаемое поведение для данного модуля.
+ */
+@SuppressWarnings("all")
 public final class Objects {
     private Objects() {}
     /**

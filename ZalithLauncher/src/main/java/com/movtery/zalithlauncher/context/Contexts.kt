@@ -37,6 +37,7 @@ import kotlin.properties.Delegates
 var GlobalContext by Delegates.notNull<Context>()
 
 fun refreshContext(context: Context) {
+    GlobalContext = context
     PathManager.refreshPaths(context)
 }
 

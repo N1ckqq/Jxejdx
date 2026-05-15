@@ -207,7 +207,7 @@ public final class TerracottaAndroidAPI {
 
         runtimeContext = new RuntimeContext(callback, logging);
 
-        String[] parts = getMetadata0().split("\0", 4);
+        String[] parts = getMetadata0().split("\0", 3);
         if (parts.length != 3) {
             throw new AssertionError("Should NOT be here.");
         }

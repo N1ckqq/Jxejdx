@@ -47,7 +47,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
-import java.util.Objects
 
 class AuthServerApi(private var baseUrl: String) {
     fun formatUrl(baseUrl: String): String {
@@ -70,7 +69,7 @@ class AuthServerApi(private var baseUrl: String) {
         onSuccess: suspend (AuthResult) -> Unit = {},
         onFailed: suspend (th: Throwable) -> Unit = {}
     ) {
-        if (Objects.isNull(baseUrl)) {
+        if (baseUrl.isBlank()) {
             onFailed(ResponseException(context.getString(R.string.account_other_login_baseurl_not_set)))
             return
         }
@@ -100,7 +99,7 @@ class AuthServerApi(private var baseUrl: String) {
         onSuccess: suspend (AuthResult) -> Unit = {},
         onFailed: suspend (th: Throwable) -> Unit = {}
     ) {
-        if (Objects.isNull(baseUrl)) {
+        if (baseUrl.isBlank()) {
             onFailed(ResponseException(context.getString(R.string.account_other_login_baseurl_not_set)))
             return
         }

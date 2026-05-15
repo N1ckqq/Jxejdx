@@ -44,7 +44,7 @@ object ZLNativeInvoker {
         (GlobalContext as? Activity)?.let { activity ->
             activity.runOnUiThread {
                 if (link.startsWith("file:")) {
-                    val newLink = formatFilePath(link)
+                    val newLink = formatFilePath(link) ?: return@runOnUiThread
                     lInfo("open link: $newLink")
 
                     val file = File(newLink)

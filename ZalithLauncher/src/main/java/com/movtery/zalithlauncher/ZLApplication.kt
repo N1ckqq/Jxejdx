@@ -60,6 +60,14 @@ class ZLApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         refreshContext(this)
 
+        // MMKV должен быть инициализирован ДО установки обработчика исключений,
+        // иначе краш в обработчике вызовет вторичный краш через Logger → AllSettings → MMKV
+        runCatching {
+            MMKV.initialize(this)
+        }.onFailure { e ->
+            Log.e("ZLApplication", "MMKV initialization failed", e)
+        }
+
         Thread.setDefaultUncaughtExceptionHandler { _, th ->
             //停止所有任务
             TaskSystem.stopAll()
@@ -84,7 +92,6 @@ class ZLApplication : Application(), SingletonImageLoader.Factory {
         runCatching {
             Fishnet.init(this, PathManager.DIR_NATIVE_LOGS.absolutePath)
 
-            MMKV.initialize(this)
             loadAllSettings(this)
 
             Logger.initialize(this)
