@@ -89,7 +89,9 @@ sealed interface DownloadSingleOperation {
     data class SelectVersion(
         val classes: PlatformClasses,
         val version: PlatformVersion,
-        val dependencyProjects: List<Pair<PlatformVersion.PlatformDependency, PlatformProject>>
+        val dependencyProjects: List<Pair<PlatformVersion.PlatformDependency, PlatformProject>>,
+        /** Версии игры, которые поддерживает этот файл мода */
+        val supportedGameVersions: Array<String> = version.platformGameVersion()
     ) : DownloadSingleOperation
     /** 安装 */
     data class Install(
@@ -136,6 +138,7 @@ fun DownloadSingleOperation(
             DownloadDialog(
                 dependencyProjects = dependencyProjects,
                 classes = classes,
+                supportedGameVersions = operation.supportedGameVersions,
                 onDismiss = {
                     changeOperation(DownloadSingleOperation.None)
                 },
@@ -159,6 +162,7 @@ fun DownloadSingleOperation(
 private fun DownloadDialog(
     dependencyProjects: List<Pair<PlatformVersion.PlatformDependency, PlatformProject>>,
     classes: PlatformClasses,
+    supportedGameVersions: Array<String> = emptyArray(),
     onDismiss: () -> Unit,
     onInstall: (List<Version>, List<PlatformVersion.PlatformDependency>) -> Unit,
     onDependencyClicked: (PlatformVersion.PlatformDependency, PlatformClasses) -> Unit
@@ -192,6 +196,34 @@ private fun DownloadDialog(
             mutableStateListOf<PlatformVersion.PlatformDependency>().apply {
                 addAll(dependencies.map { it.first })
             }
+        }
+
+        // Несовместимые версии для предупреждения
+        var incompatibleVersionNames by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<String>?>(null) }
+        var pendingVersions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Version>?>(null) }
+        var pendingDeps by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<PlatformVersion.PlatformDependency>?>(null) }
+
+        incompatibleVersionNames?.let { incompatible ->
+            SimpleAlertDialog(
+                title = stringResource(R.string.download_assets_incompatible_title),
+                text = stringResource(R.string.download_assets_incompatible_message, incompatible.joinToString("\n") { "• $it" }),
+                confirmText = stringResource(R.string.generic_anyway),
+                onDismiss = {
+                    incompatibleVersionNames = null
+                    pendingVersions = null
+                    pendingDeps = null
+                },
+                onConfirm = {
+                    val pv = pendingVersions
+                    val pd = pendingDeps
+                    incompatibleVersionNames = null
+                    pendingVersions = null
+                    pendingDeps = null
+                    if (pv != null && pd != null) {
+                        onInstall(pv, pd)
+                    }
+                }
+            )
         }
 
         Dialog(
@@ -330,7 +362,22 @@ private fun DownloadDialog(
                                 modifier = Modifier.weight(0.5f),
                                 onClick = {
                                     if (selectedVersions.isNotEmpty()) {
-                                        onInstall(selectedVersions, selectedDependencies.toList())
+                                        // Проверяем совместимость: если supportedGameVersions пустой — мод не указал версии, пропускаем проверку
+                                        val incompatible = if (supportedGameVersions.isEmpty()) {
+                                            emptyList()
+                                        } else {
+                                            selectedVersions.filter { ver ->
+                                                val mcVer = ver.getVersionInfo()?.minecraftVersion
+                                                mcVer != null && !supportedGameVersions.contains(mcVer)
+                                            }.map { it.getVersionName() }
+                                        }
+                                        if (incompatible.isNotEmpty()) {
+                                            incompatibleVersionNames = incompatible
+                                            pendingVersions = selectedVersions.toList()
+                                            pendingDeps = selectedDependencies.toList()
+                                        } else {
+                                            onInstall(selectedVersions, selectedDependencies.toList())
+                                        }
                                     }
                                 }
                             ) {
