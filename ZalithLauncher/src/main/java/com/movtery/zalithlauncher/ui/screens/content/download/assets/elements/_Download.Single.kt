@@ -522,13 +522,16 @@ private fun AssetsVersionDependencyItem(
 
 
 /**
- * Диалог выбора версий для пакетной загрузки модов.
+ * Диалог выбора версий для пакетной загрузки ресурсов.
  * Позволяет выбрать одну или несколько игровых версий,
- * в которые будут установлены все выбранные моды.
+ * в которые будут установлены все выбранные ресурсы (моды, ресурс-паки, миры).
+ *
+ * @param titleRes строковый ресурс заголовка — передаётся с %d для кол-ва ресурсов
  */
 @Composable
 fun BatchVersionSelectDialog(
     modCount: Int,
+    titleRes: Int = R.string.download_mods_batch_install_for_versions,
     onDismiss: () -> Unit,
     onInstall: (List<Version>) -> Unit
 ) {
@@ -572,7 +575,7 @@ fun BatchVersionSelectDialog(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         MarqueeText(
-                            text = stringResource(R.string.download_mods_batch_install_for_versions, modCount),
+                            text = stringResource(titleRes, modCount),
                             style = MaterialTheme.typography.titleMedium
                         )
 

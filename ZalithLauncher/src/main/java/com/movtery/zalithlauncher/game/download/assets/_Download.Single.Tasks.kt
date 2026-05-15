@@ -209,13 +209,13 @@ fun mapExceptionToMessage(e: Throwable): Pair<Int, Array<Any>?> {
 
 /**
  * 为选中的依赖项目查找兼容版本并下载
- * 通过主模组版本自动检测 Minecraft 版本和加载器，
- * 然后在各平台 API 中找到兼容的依赖版本进行下载
+ * Использует MC-версию и загрузчик из уже выбранного файла главного мода,
+ * чтобы гарантировать скачивание зависимостей строго под ту же версию игры.
  *
- * @param mainVersion 主模组的版本信息（用于提取MC版本和加载器信息）
- * @param dependencies 用户选中的依赖列表
- * @param targetVersions 要安装到哪些游戏版本
- * @param folder 版本游戏目录下的相对路径
+ * @param mainVersion главный мод (источник MC-версии и загрузчика)
+ * @param dependencies список зависимостей для скачивания
+ * @param targetVersions список установленных версий игры, куда установить файлы
+ * @param folder путь относительно игровой папки версии
  */
 fun downloadDependenciesForVersions(
     context: Context,
@@ -225,7 +225,8 @@ fun downloadDependenciesForVersions(
     folder: String,
     submitError: (ErrorViewModel.ThrowableMessage) -> Unit
 ) {
-    // 从主模组版本中获取MC版本和加载器信息
+    // Берём MC-версии из уже выбранного файла главного мода (не из всех поддерживаемых версий проекта)
+    // platformGameVersion() возвращает версии конкретного выбранного файла — это и есть целевая версия
     val mcVersions = mainVersion.platformGameVersion()
     val loaders = mainVersion.platformLoaders().map { it.getDisplayName().lowercase() }
 
@@ -242,16 +243,12 @@ fun downloadDependenciesForVersions(
 
                 for (dependency in dependencies) {
                     try {
-                        // 获取依赖项目的所有版本
                         val allVersions = getVersions(
                             projectID = dependency.projectId,
                             platform = dependency.platform
                         )
-
-                        // 初始化所有版本
                         val initializedVersions = allVersions.initAll(dependency.projectId)
 
-                        // 根据MC版本和加载器筛选兼容版本
                         val compatibleVersion = findCompatibleVersion(
                             versions = initializedVersions,
                             mcVersions = mcVersions,
@@ -260,8 +257,6 @@ fun downloadDependenciesForVersions(
 
                         if (compatibleVersion != null) {
                             lInfo("Found compatible dependency version: ${compatibleVersion.platformFileName()} for project ${dependency.projectId}")
-
-                            // 下载兼容的依赖版本
                             downloadSingleForVersions(
                                 context = context,
                                 version = compatibleVersion,
@@ -282,11 +277,8 @@ fun downloadDependenciesForVersions(
                         lWarning("Failed to resolve dependency: ${dependency.projectId}", e)
                         val message = mapExceptionToMessage(e).let { pair ->
                             val args = pair.second
-                            if (args != null) {
-                                context.getString(pair.first, *args)
-                            } else {
-                                context.getString(pair.first)
-                            }
+                            if (args != null) context.getString(pair.first, *args)
+                            else context.getString(pair.first)
                         }
                         submitError(
                             ErrorViewModel.ThrowableMessage(
@@ -306,22 +298,30 @@ fun downloadDependenciesForVersions(
 
 /**
  * 从版本列表中查找与目标MC版本和加载器兼容的最佳版本
- * 优先匹配同时满足MC版本和加载器的版本，若找不到则只匹配MC版本
- * 在匹配的候选中选择发布日期最新的版本
+ * 优先匹配同时满足MC版本（精确匹配）和加载器的版本，
+ * 若找不到则只匹配MC版本，在匹配候选中选择发布日期最新的版本
+ *
+ * @param mcVersions 目标MC版本列表（精确匹配，如 ["1.21.1"]）
+ * @param loaders 目标加载器列表（如 ["fabric"]）
  */
-private fun findCompatibleVersion(
+fun findCompatibleVersion(
     versions: List<PlatformVersion>,
     mcVersions: Array<String>,
     loaders: List<String>
 ): PlatformVersion? {
+    if (mcVersions.isEmpty()) return null
+
     // 按发布时间降序排列（最新在前）
     val sortedVersions = versions.sortedByDescending { it.platformDatePublished() }
 
-    // 优先：同时匹配MC版本和加载器
+    // 优先：同时匹配MC版本（精确）和加载器
     if (loaders.isNotEmpty()) {
         val exactMatch = sortedVersions.firstOrNull { version ->
             val versionMcVersions = version.platformGameVersion()
             val versionLoaders = version.platformLoaders().map { it.getDisplayName().lowercase() }
+            // Точное совпадение: версия должна поддерживать ТОЛЬКО те MC-версии, что в mcVersions
+            // Используем contains — ищем версии у которых есть хотя бы одна из целевых MC-версий,
+            // но при этом проверяем что среди mcVersions есть точное совпадение (без "any")
             val mcMatch = mcVersions.any { mc -> versionMcVersions.contains(mc) }
             val loaderMatch = loaders.any { loader -> versionLoaders.contains(loader) }
             mcMatch && loaderMatch
@@ -329,7 +329,7 @@ private fun findCompatibleVersion(
         if (exactMatch != null) return exactMatch
     }
 
-    // 回退：只匹配MC版本（仍选最新）
+    // Второй приоритет: только совпадение по MC-версии (без учёта загрузчика)
     return sortedVersions.firstOrNull { version ->
         val versionMcVersions = version.platformGameVersion()
         mcVersions.any { mc -> versionMcVersions.contains(mc) }
@@ -339,12 +339,13 @@ private fun findCompatibleVersion(
 
 
 /**
- * 批量下载选中的模组到指定游戏版本列表
- * 对每个模组自动获取最新兼容版本并下载
+ * Пакетная загрузка выбранных модов в указанные версии игры.
+ * Для каждого мода автоматически находит совместимую версию файла,
+ * ориентируясь на MC-версию и загрузчик из списка targetVersions.
  *
- * @param mods 要批量下载的模组列表 (platform + projectId)
- * @param targetVersions 安装目标游戏版本列表
- * @param folder 版本游戏目录下的相对路径
+ * @param mods список выбранных модов (platform + projectId)
+ * @param targetVersions список версий игры, куда нужно установить моды
+ * @param folder путь относительно игровой папки версии
  */
 fun downloadBatchMods(
     context: Context,
@@ -354,6 +355,24 @@ fun downloadBatchMods(
     submitError: (ErrorViewModel.ThrowableMessage) -> Unit
 ) {
     if (mods.isEmpty() || targetVersions.isEmpty()) return
+
+    // Собираем уникальные пары (mcVersion, loader) из выбранных игровых версий
+    // Это гарантирует скачивание файла строго под нужную MC-версию и загрузчик
+    val targetMcVersions: Array<String> = targetVersions
+        .mapNotNull { it.getVersionInfo()?.minecraftVersion }
+        .distinct()
+        .toTypedArray()
+
+    val targetLoaders: List<String> = targetVersions
+        .mapNotNull { it.getVersionInfo()?.loaderInfo?.loader?.displayName?.lowercase() }
+        .distinct()
+
+    if (targetMcVersions.isEmpty()) {
+        lWarning("Batch download: cannot determine MC versions from target game versions, aborting.")
+        return
+    }
+
+    lInfo("Batch download: targeting MC versions=${targetMcVersions.toList()}, loaders=$targetLoaders")
 
     TaskSystem.submitTask(
         Task.runTask(
@@ -369,19 +388,24 @@ fun downloadBatchMods(
                         )
                         val initializedVersions = allVersions.initAll(mod.projectId)
 
-                        // 取最新版本（列表已按日期降序排列）
-                        val latest = initializedVersions.maxByOrNull { it.platformDatePublished() }
-                        if (latest != null) {
-                            lInfo("Batch download: found latest version ${latest.platformFileName()} for ${mod.projectId}")
+                        // Ищем совместимую версию по MC-версии и загрузчику из игровых версий
+                        val compatible = findCompatibleVersion(
+                            versions = initializedVersions,
+                            mcVersions = targetMcVersions,
+                            loaders = targetLoaders
+                        )
+
+                        if (compatible != null) {
+                            lInfo("Batch download: found compatible version ${compatible.platformFileName()} for ${mod.projectId}")
                             downloadSingleForVersions(
                                 context = context,
-                                version = latest,
+                                version = compatible,
                                 versions = targetVersions,
                                 folder = folder,
                                 submitError = submitError
                             )
                         } else {
-                            lWarning("Batch download: no versions found for ${mod.projectId}")
+                            lWarning("Batch download: no compatible version found for ${mod.projectId} (MC=${targetMcVersions.toList()}, loaders=$targetLoaders)")
                             submitError(
                                 ErrorViewModel.ThrowableMessage(
                                     title = context.getString(R.string.download_assets_deps_not_found_title),
@@ -407,6 +431,102 @@ fun downloadBatchMods(
             },
             onError = { e ->
                 lWarning("An error occurred during batch mod download.", e)
+            }
+        )
+    )
+}
+
+/**
+ * Пакетная загрузка выбранных ресурсов (ресурс-паки, миры) в указанные версии игры.
+ * В отличие от модов, для ресурс-паков и миров проверка загрузчика не нужна,
+ * только проверка MC-версии (если доступна).
+ *
+ * @param assets список выбранных ресурсов (platform + projectId)
+ * @param targetVersions список версий игры, куда нужно установить ресурсы
+ * @param folder путь относительно игровой папки версии
+ * @param onFileCopied колбэк после копирования (например, для распаковки мира)
+ * @param onFileCancelled колбэк при отмене установки
+ */
+fun downloadBatchAssets(
+    context: Context,
+    assets: List<com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.SelectedMod>,
+    targetVersions: List<Version>,
+    folder: String,
+    onFileCopied: suspend (zip: java.io.File, folder: java.io.File) -> Unit = { _, _ -> },
+    onFileCancelled: (zip: java.io.File, folder: java.io.File) -> Unit = { _, _ -> },
+    submitError: (ErrorViewModel.ThrowableMessage) -> Unit
+) {
+    if (assets.isEmpty() || targetVersions.isEmpty()) return
+
+    // Для ресурс-паков и миров загрузчик не важен, но MC-версию учитываем если задана
+    val targetMcVersions: Array<String> = targetVersions
+        .mapNotNull { it.getVersionInfo()?.minecraftVersion }
+        .distinct()
+        .toTypedArray()
+
+    TaskSystem.submitTask(
+        Task.runTask(
+            id = "batch_assets_${System.currentTimeMillis()}",
+            task = { task ->
+                task.updateProgress(-1f, R.string.download_assets_deps_resolving)
+
+                for (asset in assets) {
+                    try {
+                        val allVersions = getVersions(
+                            projectID = asset.projectId,
+                            platform = asset.platform
+                        )
+                        val initializedVersions = allVersions.initAll(asset.projectId)
+
+                        // Для ресурсов без загрузчика ищем по MC-версии, иначе берём последнюю
+                        val targetVersion = if (targetMcVersions.isNotEmpty()) {
+                            findCompatibleVersion(
+                                versions = initializedVersions,
+                                mcVersions = targetMcVersions,
+                                loaders = emptyList() // загрузчик не нужен для ресурс-паков и миров
+                            ) ?: initializedVersions.maxByOrNull { it.platformDatePublished() }
+                        } else {
+                            initializedVersions.maxByOrNull { it.platformDatePublished() }
+                        }
+
+                        if (targetVersion != null) {
+                            lInfo("Batch assets download: found version ${targetVersion.platformFileName()} for ${asset.projectId}")
+                            downloadSingleForVersions(
+                                context = context,
+                                version = targetVersion,
+                                versions = targetVersions,
+                                folder = folder,
+                                onFileCopied = onFileCopied,
+                                onFileCancelled = onFileCancelled,
+                                submitError = submitError
+                            )
+                        } else {
+                            lWarning("Batch assets download: no versions found for ${asset.projectId}")
+                            submitError(
+                                ErrorViewModel.ThrowableMessage(
+                                    title = context.getString(R.string.download_assets_deps_not_found_title),
+                                    message = context.getString(R.string.download_assets_deps_not_found_message, asset.projectId)
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        lWarning("Batch assets download: failed for ${asset.projectId}", e)
+                        val message = mapExceptionToMessage(e).let { pair ->
+                            val args = pair.second
+                            if (args != null) context.getString(pair.first, *args)
+                            else context.getString(pair.first)
+                        }
+                        submitError(
+                            ErrorViewModel.ThrowableMessage(
+                                title = context.getString(R.string.download_assets_deps_failed_title),
+                                message = message
+                            )
+                        )
+                    }
+                }
+            },
+            onError = { e ->
+                lWarning("An error occurred during batch assets download.", e)
             }
         )
     )
