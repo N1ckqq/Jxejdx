@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -79,17 +80,6 @@ import com.movtery.layer_controller.utils.snap.SnapMode
 import com.movtery.layer_controller.utils.toPercentagePosition
 import kotlin.math.roundToInt
 
-/**
- * 控制布局编辑器渲染层
- * @param selectedWidget 当前选中的控件，编辑器将会标注它
- * @param floatingButtons 选中控件后，在控件下方悬浮的按钮栏
- * @param enableSnap 是否开启吸附
- * @param snapInAllLayers 是否在全控制层范围内吸附
- * @param snapMode 吸附模式
- * @param focusedLayer 聚焦的层级，需要针对性对某一层级进行编辑时
- * @param localSnapRange 局部吸附范围（仅在Local模式下有效）
- * @param snapThresholdValue 吸附距离阈值
- */
 @Composable
 fun ControlEditorLayer(
     observedLayout: ObservableControlLayout,
@@ -114,26 +104,15 @@ fun ControlEditorLayer(
         val guideLines = remember { mutableStateMapOf<ObservableWidget, List<GuideLine>>() }
 
         val renderingLayers = when (focusedLayer) {
-            null -> layers
-                //仅渲染编辑器可见层
-                .filter { !it.editorHide }
-                //反转：将最后一层视为底层，逐步向上渲染
-                .reversed()
-            //开启聚焦模式
+            null -> layers.filter { !it.editorHide }.reversed()
             else -> listOf(focusedLayer)
         }
 
-        BoxWithConstraints(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            //这里临时记录正在调整大小的状态，消除抖动
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             var resizingWidget by remember { mutableStateOf<ObservableWidget?>(null) }
-            /** 拖动中的左上角的手柄位置 TopLeft */
             var dragTL by remember { mutableStateOf(Offset.Zero) }
-            /** 拖动中的右下角的手柄位置 BottomRight */
             var dragBR by remember { mutableStateOf(Offset.Zero) }
 
-            //空白可点击层，点击背景清除选中的按钮
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -148,22 +127,15 @@ fun ControlEditorLayer(
             val density = LocalDensity.current
             val screenSize = remember(maxWidth, maxHeight) {
                 with(density) {
-                    IntSize(
-                        width = maxWidth.roundToPx(),
-                        height = maxHeight.roundToPx()
-                    )
+                    IntSize(width = maxWidth.roundToPx(), height = maxHeight.roundToPx())
                 }
             }
 
-            //计算选中控件的像素边界，优先使用拖拽中的实时坐标
-            val selectedWidgetBounds by remember(
-                selectedWidget, resizingWidget, dragTL, dragBR, screenSize
-            ) {
+            val selectedWidgetBounds by remember(selectedWidget, resizingWidget, dragTL, dragBR, screenSize) {
                 derivedStateOf {
                     val widget = selectedWidget ?: return@derivedStateOf null
                     val widgetSize = widget.internalRenderSize
                     if (widgetSize == IntSize.Zero) return@derivedStateOf null
-
                     if (resizingWidget == widget) {
                         dragTL to dragBR
                     } else {
@@ -184,233 +156,136 @@ fun ControlEditorLayer(
                 localSnapRange = localSnapRange,
                 snapThresholdValue = snapThresholdValue,
                 onButtonTap = onButtonTap,
-                drawLine = { data, line ->
-                    guideLines[data] = line
-                },
-                onLineCancel = { data ->
-                    guideLines.remove(data)
-                }
+                drawLine = { data, line -> guideLines[data] = line },
+                onLineCancel = { data -> guideLines.remove(data) }
             )
-            //绘制参考线与选中框
+
             Canvas(modifier = Modifier.fillMaxSize()) {
                 guideLines.values.forEach { guidelines ->
                     guidelines.forEach { guideline ->
-                        drawLine(
-                            guideline = guideline,
-                            color = primaryColor
-                        )
+                        drawLine(guideline = guideline, color = primaryColor)
                     }
                 }
-
-                //绘制选中控件的红色方框
-                selectedWidgetBounds?.let { (drawTL, drawBR) ->
-                    //稍微留出点空隙
+                selectedWidgetBounds?.let { (tl, br) ->
                     val padding = 4.dp.toPx()
                     drawRect(
                         color = primaryColor,
-                        topLeft = Offset(drawTL.x - padding, drawTL.y - padding),
-                        size = Size(
-                            (drawBR.x - drawTL.x) + padding * 2,
-                            (drawBR.y - drawTL.y) + padding * 2
-                        ),
+                        topLeft = Offset(tl.x - padding, tl.y - padding),
+                        size = Size((br.x - tl.x) + padding * 2, (br.y - tl.y) + padding * 2),
                         style = Stroke(width = 1.dp.toPx())
                     )
                 }
             }
 
-            //绘制调整大小的手柄
-            selectedWidget?.takeIf { widget ->
-                //控件的大小类型为包裹内容时，调整大小是无意义的
-                widget.widgetSize.type != ButtonSize.Type.WrapContent
-            }?.let { widget ->
-                selectedWidgetBounds?.let { (drawTL, drawBR) ->
-                    //获取尺寸约束的像素值
-                    val minSizePx = with(density) { MIN_SIZE_DP.dp.toPx() }
-                    val oldSize = widget.widgetSize
-
-                    val (minWidth, maxWidth) = when (oldSize.type) {
-                        ButtonSize.Type.Dp -> minSizePx to screenSize.width.toFloat()
-                        ButtonSize.Type.Percentage -> {
-                            val reference = if (oldSize.widthReference == ButtonSize.Reference.ScreenWidth) {
-                                screenSize.width
-                            } else {
-                                screenSize.height
-                            }
-                            (reference * 0.01f) to (reference * 1.0f)
-                        }
-                        ButtonSize.Type.WrapContent -> minSizePx to screenSize.width.toFloat()
-                    }
-
-                    val (minHeight, maxHeight) = when (oldSize.type) {
-                        ButtonSize.Type.Dp -> minSizePx to screenSize.height.toFloat()
-                        ButtonSize.Type.Percentage -> {
-                            val reference = if (oldSize.heightReference == ButtonSize.Reference.ScreenWidth) {
-                                screenSize.width
-                            } else {
-                                screenSize.height
-                            }
-                            (reference * 0.01f) to (reference * 1.0f)
-                        }
-                        ButtonSize.Type.WrapContent -> minSizePx to screenSize.height.toFloat()
-                    }
-
-                    /**
-                     * 拖动手柄时更新控件的位置和尺寸
-                     */
-                    val updateSizeAndPos = { newTopLeft: Offset, newSize: IntSize ->
-                        val newPosPercentage = newTopLeft.toPercentagePosition(newSize, screenSize)
-                        widget.putRenderPosition(newPosPercentage)
-
+            selectedWidget
+                ?.takeIf { it.widgetSize.type != ButtonSize.Type.WrapContent }
+                ?.let { widget ->
+                    selectedWidgetBounds?.let { (handleTL, handleBR) ->
+                        val minSizePx = with(density) { MIN_SIZE_DP.dp.toPx() }
                         val oldSize = widget.widgetSize
-                        val newWidgetSize = when (oldSize.type) {
-                            ButtonSize.Type.Dp -> {
-                                oldSize.copy(
+
+                        val (minWidth, maxWidgetWidth) = when (oldSize.type) {
+                            ButtonSize.Type.Dp -> minSizePx to screenSize.width.toFloat()
+                            ButtonSize.Type.Percentage -> {
+                                val ref = if (oldSize.widthReference == ButtonSize.Reference.ScreenWidth)
+                                    screenSize.width else screenSize.height
+                                (ref * 0.01f) to (ref * 1.0f)
+                            }
+                            ButtonSize.Type.WrapContent -> minSizePx to screenSize.width.toFloat()
+                        }
+
+                        val (minHeight, maxWidgetHeight) = when (oldSize.type) {
+                            ButtonSize.Type.Dp -> minSizePx to screenSize.height.toFloat()
+                            ButtonSize.Type.Percentage -> {
+                                val ref = if (oldSize.heightReference == ButtonSize.Reference.ScreenWidth)
+                                    screenSize.width else screenSize.height
+                                (ref * 0.01f) to (ref * 1.0f)
+                            }
+                            ButtonSize.Type.WrapContent -> minSizePx to screenSize.height.toFloat()
+                        }
+
+                        val updateSizeAndPos = { newTopLeft: Offset, newSize: IntSize ->
+                            widget.putRenderPosition(newTopLeft.toPercentagePosition(newSize, screenSize))
+                            val cur = widget.widgetSize
+                            val newWidgetSize = when (cur.type) {
+                                ButtonSize.Type.Dp -> cur.copy(
                                     widthDp = with(density) { newSize.width.toDp().value },
                                     heightDp = with(density) { newSize.height.toDp().value }
                                 )
-                            }
-
-                            ButtonSize.Type.Percentage -> {
-                                val widthRef = when (oldSize.widthReference) {
-                                    ButtonSize.Reference.ScreenWidth -> screenSize.width
-                                    ButtonSize.Reference.ScreenHeight -> screenSize.height
+                                ButtonSize.Type.Percentage -> {
+                                    val wRef = when (cur.widthReference) {
+                                        ButtonSize.Reference.ScreenWidth -> screenSize.width
+                                        ButtonSize.Reference.ScreenHeight -> screenSize.height
+                                    }
+                                    val hRef = when (cur.heightReference) {
+                                        ButtonSize.Reference.ScreenWidth -> screenSize.width
+                                        ButtonSize.Reference.ScreenHeight -> screenSize.height
+                                    }
+                                    cur.copy(
+                                        widthPercentage = (newSize.width.toFloat() / wRef * MAX_SIZE_PERCENTAGE)
+                                            .roundToInt().coerceIn(MIN_SIZE_PERCENTAGE, MAX_SIZE_PERCENTAGE),
+                                        heightPercentage = (newSize.height.toFloat() / hRef * MAX_SIZE_PERCENTAGE)
+                                            .roundToInt().coerceIn(MIN_SIZE_PERCENTAGE, MAX_SIZE_PERCENTAGE)
+                                    )
                                 }
-                                val heightRef = when (oldSize.heightReference) {
-                                    ButtonSize.Reference.ScreenWidth -> screenSize.width
-                                    ButtonSize.Reference.ScreenHeight -> screenSize.height
-                                }
-                                oldSize.copy(
-                                    widthPercentage = (newSize.width.toFloat() / widthRef * MAX_SIZE_PERCENTAGE)
-                                        .roundToInt()
-                                        .coerceIn(MIN_SIZE_PERCENTAGE, MAX_SIZE_PERCENTAGE),
-                                    heightPercentage = (newSize.height.toFloat() / heightRef * MAX_SIZE_PERCENTAGE)
-                                        .roundToInt()
-                                        .coerceIn(MIN_SIZE_PERCENTAGE, MAX_SIZE_PERCENTAGE)
-                                )
+                                ButtonSize.Type.WrapContent -> cur
                             }
-                            ButtonSize.Type.WrapContent -> oldSize
+                            widget.putWidgetSize(newWidgetSize)
                         }
-                        widget.putWidgetSize(newWidgetSize)
-                    }
 
-                    @Composable
-                    fun ResizeHandle(
-                        isTopLeft: Boolean,
-                        currentPos: Offset,
-                        touchSize: Dp = 30.dp,
-                        visualSize: Dp = 14.dp
-                    ) {
-                        var activeHandleCount by remember { mutableIntStateOf(0) }
-                        val touchSizePx = with(density) { touchSize.toPx() }
-                        val visualSizePx = with(density) { visualSize.toPx() }
-
-                        Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        (currentPos.x - touchSizePx / 2).roundToInt(),
-                                        (currentPos.y - touchSizePx / 2).roundToInt()
-                                    )
-                                }
-                                .size(touchSize)
-                                .drawBehind {
-                                    drawCircle(
-                                        color = primaryColor,
-                                        radius = visualSizePx / 2,
-                                        center = center
-                                    )
-                                }
-                                .pointerInput(widget, screenSize, minWidth, maxWidth, minHeight, maxHeight) {
-                                    detectDragGestures(
-                                        onDragStart = {
-                                            if (activeHandleCount == 0) {
-                                                val currentWidgetSize = widget.internalRenderSize
-                                                val pos = getWidgetPosition(widget, currentWidgetSize, screenSize)
-                                                dragTL = pos
-                                                dragBR = Offset(pos.x + currentWidgetSize.width, pos.y + currentWidgetSize.height)
-                                            }
-                                            activeHandleCount++
-                                            resizingWidget = widget
-                                            widget.movingOffset = dragTL
-                                            widget.isEditingPos = true
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            if (isTopLeft) {
-                                                val newTL = dragTL + dragAmount
-                                                val finalTL = Offset(
-                                                    newTL.x.coerceIn(maxOf(0f, dragBR.x - maxWidth), dragBR.x - minWidth),
-                                                    newTL.y.coerceIn(maxOf(0f, dragBR.y - maxHeight), dragBR.y - minHeight)
-                                                )
-                                                dragTL = finalTL
-                                                widget.movingOffset = finalTL
-                                                val finalSize = IntSize(
-                                                    (dragBR.x - finalTL.x).roundToInt(),
-                                                    (dragBR.y - finalTL.y).roundToInt()
-                                                )
-                                                updateSizeAndPos(finalTL, finalSize)
-                                            } else {
-                                                val newBR = dragBR + dragAmount
-                                                val finalBR = Offset(
-                                                    newBR.x.coerceIn(dragTL.x + minWidth, minOf(screenSize.width.toFloat(), dragTL.x + maxWidth)),
-                                                    newBR.y.coerceIn(dragTL.y + minHeight, minOf(screenSize.height.toFloat(), dragTL.y + maxHeight))
-                                                )
-                                                dragBR = finalBR
-                                                val finalSize = IntSize(
-                                                    (finalBR.x - dragTL.x).roundToInt(),
-                                                    (finalBR.y - dragTL.y).roundToInt()
-                                                )
-                                                updateSizeAndPos(dragTL, finalSize)
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            activeHandleCount = (activeHandleCount - 1).coerceAtLeast(0)
-                                            if (activeHandleCount == 0) {
-                                                resizingWidget = null
-                                                widget.isEditingPos = false
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            activeHandleCount = (activeHandleCount - 1).coerceAtLeast(0)
-                                            if (activeHandleCount == 0) {
-                                                resizingWidget = null
-                                                widget.isEditingPos = false
-                                            }
-                                        }
-                                    )
-                                }
+                        ResizeHandle(
+                            isTopLeft = true,
+                            currentPos = handleTL,
+                            primaryColor = primaryColor,
+                            density = density,
+                            widget = widget,
+                            screenSize = screenSize,
+                            dragTL = dragTL,
+                            dragBR = dragBR,
+                            minWidth = minWidth,
+                            maxWidgetWidth = maxWidgetWidth,
+                            minHeight = minHeight,
+                            maxWidgetHeight = maxWidgetHeight,
+                            onDragTLChange = { dragTL = it },
+                            onDragBRChange = { dragBR = it },
+                            onResizingWidgetChange = { resizingWidget = it },
+                            updateSizeAndPos = updateSizeAndPos
+                        )
+                        ResizeHandle(
+                            isTopLeft = false,
+                            currentPos = handleBR,
+                            primaryColor = primaryColor,
+                            density = density,
+                            widget = widget,
+                            screenSize = screenSize,
+                            dragTL = dragTL,
+                            dragBR = dragBR,
+                            minWidth = minWidth,
+                            maxWidgetWidth = maxWidgetWidth,
+                            minHeight = minHeight,
+                            maxWidgetHeight = maxWidgetHeight,
+                            onDragTLChange = { dragTL = it },
+                            onDragBRChange = { dragBR = it },
+                            onResizingWidgetChange = { resizingWidget = it },
+                            updateSizeAndPos = updateSizeAndPos
                         )
                     }
-
-                    //左上角手柄
-                    ResizeHandle(isTopLeft = true, currentPos = drawTL)
-                    //右下角手柄
-                    ResizeHandle(isTopLeft = false, currentPos = drawBR)
                 }
-            }
 
-            //悬浮功能按钮栏
             selectedWidget?.let {
-                selectedWidgetBounds?.let { (drawTL, drawBR) ->
+                selectedWidgetBounds?.let { (tl, br) ->
                     var barSize by remember { mutableStateOf(IntSize.Zero) }
-
-                    val centerX = (drawTL.x + drawBR.x) / 2
-                    val targetY = drawBR.y + with(density) { 8.dp.toPx() }
-
-                    //居中显示，但不能超出屏幕左右边界
+                    val centerX = (tl.x + br.x) / 2
+                    val targetY = br.y + with(density) { 8.dp.toPx() }
                     val xPos = (centerX - barSize.width / 2)
                         .coerceIn(0f, maxOf(0f, screenSize.width.toFloat() - barSize.width))
                     val yPos = targetY
                         .coerceAtMost(maxOf(0f, screenSize.height.toFloat() - barSize.height))
-
                     Row(
                         modifier = Modifier
                             .onSizeChanged { barSize = it }
-                            //加载好位置之后再显示，否则有点影响体验
                             .alpha(if (barSize != IntSize.Zero) 1f else 0f)
-                            .offset {
-                                IntOffset(xPos.roundToInt(), yPos.roundToInt())
-                            },
+                            .offset { IntOffset(xPos.roundToInt(), yPos.roundToInt()) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         content = floatingButtons
@@ -421,43 +296,132 @@ fun ControlEditorLayer(
     }
 }
 
-/**
- * 根据吸附参考线绘制线条
- */
+@Composable
+private fun ResizeHandle(
+    isTopLeft: Boolean,
+    currentPos: Offset,
+    primaryColor: Color,
+    density: Density,
+    widget: ObservableWidget,
+    screenSize: IntSize,
+    dragTL: Offset,
+    dragBR: Offset,
+    minWidth: Float,
+    maxWidgetWidth: Float,
+    minHeight: Float,
+    maxWidgetHeight: Float,
+    onDragTLChange: (Offset) -> Unit,
+    onDragBRChange: (Offset) -> Unit,
+    onResizingWidgetChange: (ObservableWidget?) -> Unit,
+    updateSizeAndPos: (Offset, IntSize) -> Unit,
+    touchSize: Dp = 30.dp,
+    visualSize: Dp = 14.dp
+) {
+    var activeHandleCount by remember { mutableIntStateOf(0) }
+    val touchSizePx = with(density) { touchSize.toPx() }
+    val visualSizePx = with(density) { visualSize.toPx() }
+
+    // keep latest lambda captures without restarting pointerInput
+    val latestDragTL by rememberUpdatedState(dragTL)
+    val latestDragBR by rememberUpdatedState(dragBR)
+    val latestUpdate by rememberUpdatedState(updateSizeAndPos)
+    val latestOnTLChange by rememberUpdatedState(onDragTLChange)
+    val latestOnBRChange by rememberUpdatedState(onDragBRChange)
+    val latestOnResizing by rememberUpdatedState(onResizingWidgetChange)
+
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    (currentPos.x - touchSizePx / 2).roundToInt(),
+                    (currentPos.y - touchSizePx / 2).roundToInt()
+                )
+            }
+            .size(touchSize)
+            .drawBehind {
+                drawCircle(color = primaryColor, radius = visualSizePx / 2, center = center)
+            }
+            .pointerInput(widget, screenSize, minWidth, maxWidgetWidth, minHeight, maxWidgetHeight) {
+                detectDragGestures(
+                    onDragStart = {
+                        if (activeHandleCount == 0) {
+                            val ws = widget.internalRenderSize
+                            val pos = getWidgetPosition(widget, ws, screenSize)
+                            latestOnTLChange(pos)
+                            latestOnBRChange(Offset(pos.x + ws.width, pos.y + ws.height))
+                        }
+                        activeHandleCount++
+                        latestOnResizing(widget)
+                        widget.movingOffset = latestDragTL
+                        widget.isEditingPos = true
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (isTopLeft) {
+                            val newTL = latestDragTL + dragAmount
+                            val finalTL = Offset(
+                                newTL.x.coerceIn(maxOf(0f, latestDragBR.x - maxWidgetWidth), latestDragBR.x - minWidth),
+                                newTL.y.coerceIn(maxOf(0f, latestDragBR.y - maxWidgetHeight), latestDragBR.y - minHeight)
+                            )
+                            latestOnTLChange(finalTL)
+                            widget.movingOffset = finalTL
+                            latestUpdate(
+                                finalTL,
+                                IntSize((latestDragBR.x - finalTL.x).roundToInt(), (latestDragBR.y - finalTL.y).roundToInt())
+                            )
+                        } else {
+                            val newBR = latestDragBR + dragAmount
+                            val finalBR = Offset(
+                                newBR.x.coerceIn(latestDragTL.x + minWidth, minOf(screenSize.width.toFloat(), latestDragTL.x + maxWidgetWidth)),
+                                newBR.y.coerceIn(latestDragTL.y + minHeight, minOf(screenSize.height.toFloat(), latestDragTL.y + maxWidgetHeight))
+                            )
+                            latestOnBRChange(finalBR)
+                            latestUpdate(
+                                latestDragTL,
+                                IntSize((finalBR.x - latestDragTL.x).roundToInt(), (finalBR.y - latestDragTL.y).roundToInt())
+                            )
+                        }
+                    },
+                    onDragEnd = {
+                        activeHandleCount = (activeHandleCount - 1).coerceAtLeast(0)
+                        if (activeHandleCount == 0) {
+                            latestOnResizing(null)
+                            widget.isEditingPos = false
+                        }
+                    },
+                    onDragCancel = {
+                        activeHandleCount = (activeHandleCount - 1).coerceAtLeast(0)
+                        if (activeHandleCount == 0) {
+                            latestOnResizing(null)
+                            widget.isEditingPos = false
+                        }
+                    }
+                )
+            }
+    )
+}
+
 private fun DrawScope.drawLine(
     guideline: GuideLine,
-    color: Color/* = Color(0xFFFF5252)*/,
+    color: Color,
     strokeWidth: Float = 2f
 ) {
     when (guideline.direction) {
-        LineDirection.Vertical -> {
-            drawLine(
-                color = color,
-                start = Offset(guideline.coordinate, 0f),
-                end = Offset(guideline.coordinate, size.height),
-                strokeWidth = strokeWidth
-            )
-        }
-        LineDirection.Horizontal -> {
-            drawLine(
-                color = color,
-                start = Offset(0f, guideline.coordinate),
-                end = Offset(size.width, guideline.coordinate),
-                strokeWidth = strokeWidth
-            )
-        }
+        LineDirection.Vertical -> drawLine(
+            color = color,
+            start = Offset(guideline.coordinate, 0f),
+            end = Offset(guideline.coordinate, size.height),
+            strokeWidth = strokeWidth
+        )
+        LineDirection.Horizontal -> drawLine(
+            color = color,
+            start = Offset(0f, guideline.coordinate),
+            end = Offset(size.width, guideline.coordinate),
+            strokeWidth = strokeWidth
+        )
     }
 }
 
-/**
- * @param enableSnap 是否开启吸附功能
- * @param snapMode 吸附模式
- * @param snapInAllLayers 是否在全控制层范围内吸附
- * @param localSnapRange 局部吸附范围（仅在Local模式下有效）
- * @param snapThresholdValue 吸附距离阈值
- * @param drawLine 绘制吸附参考线
- * @param onLineCancel 取消吸附参考线
- */
 @Composable
 private fun ControlWidgetRenderer(
     screenSize: IntSize,
@@ -474,97 +438,126 @@ private fun ControlWidgetRenderer(
     onLineCancel: (ObservableWidget) -> Unit
 ) {
     val allWidgetsMap = remember { mutableStateMapOf<ObservableControlLayer, List<ObservableWidget>>() }
-    val snapInAllLayers1 by rememberUpdatedState(snapInAllLayers)
-
-    @Composable
-    fun RenderWidget(
-        data: ObservableWidget,
-        layer: ObservableControlLayer,
-        isPressed: Boolean
-    ) {
-        TextButton(
-            isEditMode = true,
-            data = data,
-            allStyles = styles,
-            screenSize = screenSize,
-            isDark = isDark,
-            enableSnap = enableSnap,
-            snapMode = snapMode,
-            localSnapRange = localSnapRange,
-            getOtherWidgets = {
-                allWidgetsMap
-                    .filter { (layer1, _) ->
-                        snapInAllLayers1 || layer1 == layer
-                    }
-                    .values.flatten().filter { it != data }
-            },
-            snapThresholdValue = snapThresholdValue,
-            drawLine = drawLine,
-            onLineCancel = onLineCancel,
-            isPressed = isPressed,
-            onTapInEditMode = {
-                onButtonTap(data, layer)
-            }
-        )
-    }
+    val latestSnapInAllLayers by rememberUpdatedState(snapInAllLayers)
 
     Layout(
         content = {
-            //按图层顺序渲染所有可见的控件
             renderingLayers.forEach { layer ->
                 val normalButtons by layer.normalButtons.collectAsStateWithLifecycle()
                 val textBoxes by layer.textBoxes.collectAsStateWithLifecycle()
 
-                val widgetsInLayer = normalButtons + textBoxes
-                allWidgetsMap[layer] = widgetsInLayer
+                allWidgetsMap[layer] = normalButtons + textBoxes
 
                 textBoxes.forEach { data ->
-                    RenderWidget(data, layer, isPressed = false)
+                    RenderWidget(
+                        data = data,
+                        layer = layer,
+                        isPressed = false,
+                        styles = styles,
+                        screenSize = screenSize,
+                        isDark = isDark,
+                        enableSnap = enableSnap,
+                        snapMode = snapMode,
+                        localSnapRange = localSnapRange,
+                        snapThresholdValue = snapThresholdValue,
+                        drawLine = drawLine,
+                        onLineCancel = onLineCancel,
+                        allWidgetsMap = allWidgetsMap,
+                        snapInAllLayers = latestSnapInAllLayers,
+                        onButtonTap = onButtonTap
+                    )
                 }
-
                 normalButtons.forEach { data ->
-                    RenderWidget(data, layer, data.isPressed)
+                    RenderWidget(
+                        data = data,
+                        layer = layer,
+                        isPressed = data.isPressed,
+                        styles = styles,
+                        screenSize = screenSize,
+                        isDark = isDark,
+                        enableSnap = enableSnap,
+                        snapMode = snapMode,
+                        localSnapRange = localSnapRange,
+                        snapThresholdValue = snapThresholdValue,
+                        drawLine = drawLine,
+                        onLineCancel = onLineCancel,
+                        allWidgetsMap = allWidgetsMap,
+                        snapInAllLayers = latestSnapInAllLayers,
+                        onButtonTap = onButtonTap
+                    )
                 }
             }
         }
     ) { measurables, constraints ->
-        val placeables = measurables.map { measurable ->
-            measurable.measure(constraints)
-        }
+        val placeables = measurables.map { it.measure(constraints) }
 
         var index = 0
         fun ObservableWidget.putSize() {
             if (index < placeables.size) {
-                val placeable = placeables[index]
-                this.internalRenderSize = IntSize(placeable.width, placeable.height)
+                internalRenderSize = IntSize(placeables[index].width, placeables[index].height)
                 index++
             }
         }
-
         renderingLayers.fastForEach { layer ->
             layer.textBoxes.value.fastForEach { it.putSize() }
             layer.normalButtons.value.fastForEach { it.putSize() }
         }
 
         layout(constraints.maxWidth, constraints.maxHeight) {
-            var placeableIndex = 0
+            var pi = 0
             fun ObservableWidget.place() {
-                if (placeableIndex < placeables.size) {
-                    val placeable = placeables[placeableIndex]
-                    val position = getWidgetPosition(
-                        data = this,
-                        widgetSize = IntSize(placeable.width, placeable.height),
-                        screenSize = screenSize
-                    )
-                    placeable.place(position.x.toInt(), position.y.toInt())
-                    placeableIndex++
+                if (pi < placeables.size) {
+                    val p = placeables[pi]
+                    val pos = getWidgetPosition(this, IntSize(p.width, p.height), screenSize)
+                    p.place(pos.x.toInt(), pos.y.toInt())
+                    pi++
                 }
             }
-
             renderingLayers.fastForEach { layer ->
                 layer.textBoxes.value.fastForEach { it.place() }
                 layer.normalButtons.value.fastForEach { it.place() }
             }
         }
     }
+}
+
+@Composable
+private fun RenderWidget(
+    data: ObservableWidget,
+    layer: ObservableControlLayer,
+    isPressed: Boolean,
+    styles: List<ObservableButtonStyle>,
+    screenSize: IntSize,
+    isDark: Boolean,
+    enableSnap: Boolean,
+    snapMode: SnapMode,
+    localSnapRange: Dp,
+    snapThresholdValue: Dp,
+    drawLine: (ObservableWidget, List<GuideLine>) -> Unit,
+    onLineCancel: (ObservableWidget) -> Unit,
+    allWidgetsMap: Map<ObservableControlLayer, List<ObservableWidget>>,
+    snapInAllLayers: Boolean,
+    onButtonTap: (data: ObservableWidget, layer: ObservableControlLayer) -> Unit
+) {
+    TextButton(
+        isEditMode = true,
+        data = data,
+        allStyles = styles,
+        screenSize = screenSize,
+        isDark = isDark,
+        enableSnap = enableSnap,
+        snapMode = snapMode,
+        localSnapRange = localSnapRange,
+        getOtherWidgets = {
+            allWidgetsMap
+                .filter { (l, _) -> snapInAllLayers || l == layer }
+                .values.flatten()
+                .filter { it != data }
+        },
+        snapThresholdValue = snapThresholdValue,
+        drawLine = drawLine,
+        onLineCancel = onLineCancel,
+        isPressed = isPressed,
+        onTapInEditMode = { onButtonTap(data, layer) }
+    )
 }
