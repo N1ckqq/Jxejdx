@@ -23,6 +23,7 @@ import com.movtery.zalithlauncher.R
 import com.movtery.zalithlauncher.coroutine.Task
 import com.movtery.zalithlauncher.coroutine.TaskSystem
 import com.movtery.zalithlauncher.database.AppDatabase
+import com.movtery.zalithlauncher.game.download.assets.platform.PlatformDependencyType
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformVersion
 import com.movtery.zalithlauncher.game.download.assets.platform.getVersions
 import com.movtery.zalithlauncher.game.download.assets.platform.mcim.mapMCIMMirrorUrls
@@ -340,8 +341,9 @@ fun findCompatibleVersion(
 
 /**
  * Пакетная загрузка выбранных модов в указанные версии игры.
- * Для каждого мода автоматически находит совместимую версию файла,
- * ориентируясь на MC-версию и загрузчик из списка targetVersions.
+ * Для каждого мода автоматически:
+ * 1. Находит совместимую версию файла по MC-версии и загрузчику из targetVersions
+ * 2. Скачивает все REQUIRED зависимости найденной версии
  *
  * @param mods список выбранных модов (platform + projectId)
  * @param targetVersions список версий игры, куда нужно установить моды
@@ -356,8 +358,7 @@ fun downloadBatchMods(
 ) {
     if (mods.isEmpty() || targetVersions.isEmpty()) return
 
-    // Собираем уникальные пары (mcVersion, loader) из выбранных игровых версий
-    // Это гарантирует скачивание файла строго под нужную MC-версию и загрузчик
+    // Берём MC-версии и загрузчик из выбранных игровых версий
     val targetMcVersions: Array<String> = targetVersions
         .mapNotNull { it.getVersionInfo()?.minecraftVersion }
         .distinct()
@@ -388,7 +389,7 @@ fun downloadBatchMods(
                         )
                         val initializedVersions = allVersions.initAll(mod.projectId)
 
-                        // Ищем совместимую версию по MC-версии и загрузчику из игровых версий
+                        // Находим совместимую версию по MC-версии и загрузчику
                         val compatible = findCompatibleVersion(
                             versions = initializedVersions,
                             mcVersions = targetMcVersions,
@@ -396,7 +397,9 @@ fun downloadBatchMods(
                         )
 
                         if (compatible != null) {
-                            lInfo("Batch download: found compatible version ${compatible.platformFileName()} for ${mod.projectId}")
+                            lInfo("Batch download: found version ${compatible.platformFileName()} for ${mod.projectId}")
+
+                            // 1. Скачиваем сам мод
                             downloadSingleForVersions(
                                 context = context,
                                 version = compatible,
@@ -404,8 +407,66 @@ fun downloadBatchMods(
                                 folder = folder,
                                 submitError = submitError
                             )
+
+                            // 2. Автоматически скачиваем все REQUIRED зависимости.
+                            //    Используем MC-версию и загрузчик из найденного файла —
+                            //    это гарантирует точное совпадение версий зависимостей.
+                            val requiredDeps = compatible.platformDependencies()
+                                .filter { it.type == PlatformDependencyType.REQUIRED }
+
+                            if (requiredDeps.isNotEmpty()) {
+                                lInfo("Batch download: resolving ${requiredDeps.size} required dep(s) for ${mod.projectId}")
+                                val depMcVersions = compatible.platformGameVersion()
+                                val depLoaders = compatible.platformLoaders()
+                                    .map { it.getDisplayName().lowercase() }
+
+                                for (dep in requiredDeps) {
+                                    try {
+                                        val depVersions = getVersions(
+                                            projectID = dep.projectId,
+                                            platform = dep.platform
+                                        ).initAll(dep.projectId)
+
+                                        val depCompatible = findCompatibleVersion(
+                                            versions = depVersions,
+                                            mcVersions = depMcVersions,
+                                            loaders = depLoaders
+                                        )
+                                        if (depCompatible != null) {
+                                            lInfo("Batch download: dep ${dep.projectId} -> ${depCompatible.platformFileName()}")
+                                            downloadSingleForVersions(
+                                                context = context,
+                                                version = depCompatible,
+                                                versions = targetVersions,
+                                                folder = folder,
+                                                submitError = submitError
+                                            )
+                                        } else {
+                                            lWarning("Batch download: no compatible dep version for ${dep.projectId}")
+                                            submitError(
+                                                ErrorViewModel.ThrowableMessage(
+                                                    title = context.getString(R.string.download_assets_deps_not_found_title),
+                                                    message = context.getString(R.string.download_assets_deps_not_found_message, dep.projectId)
+                                                )
+                                            )
+                                        }
+                                    } catch (e: Exception) {
+                                        lWarning("Batch download: failed to resolve dep ${dep.projectId}", e)
+                                        val msg = mapExceptionToMessage(e).let { pair ->
+                                            if (pair.second != null) context.getString(pair.first, *pair.second!!)
+                                            else context.getString(pair.first)
+                                        }
+                                        submitError(
+                                            ErrorViewModel.ThrowableMessage(
+                                                title = context.getString(R.string.download_assets_deps_failed_title),
+                                                message = msg
+                                            )
+                                        )
+                                    }
+                                }
+                            }
                         } else {
-                            lWarning("Batch download: no compatible version found for ${mod.projectId} (MC=${targetMcVersions.toList()}, loaders=$targetLoaders)")
+                            lWarning("Batch download: no compatible version for ${mod.projectId} (MC=${targetMcVersions.toList()}, loaders=$targetLoaders)")
                             submitError(
                                 ErrorViewModel.ThrowableMessage(
                                     title = context.getString(R.string.download_assets_deps_not_found_title),
