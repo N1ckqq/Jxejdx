@@ -199,26 +199,26 @@ private fun DownloadDialog(
         }
 
         // Несовместимые версии для предупреждения
-        var incompatibleVersionNames by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<String>?>(null) }
-        var pendingVersions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Version>?>(null) }
-        var pendingDeps by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<PlatformVersion.PlatformDependency>?>(null) }
+        val incompatibleVersionNamesState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<String>?>(null) }
+        val pendingVersionsState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<Version>?>(null) }
+        val pendingDepsState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<PlatformVersion.PlatformDependency>?>(null) }
 
-        incompatibleVersionNames?.let { incompatible ->
+        incompatibleVersionNamesState.value?.let { incompatible ->
             SimpleAlertDialog(
                 title = stringResource(R.string.download_assets_incompatible_title),
                 text = stringResource(R.string.download_assets_incompatible_message, incompatible.joinToString("\n") { "• $it" }),
                 confirmText = stringResource(R.string.generic_anyway),
                 onDismiss = {
-                    incompatibleVersionNames = null
-                    pendingVersions = null
-                    pendingDeps = null
+                    incompatibleVersionNamesState.value = null
+                    pendingVersionsState.value = null
+                    pendingDepsState.value = null
                 },
                 onConfirm = {
-                    val pv = pendingVersions
-                    val pd = pendingDeps
-                    incompatibleVersionNames = null
-                    pendingVersions = null
-                    pendingDeps = null
+                    val pv = pendingVersionsState.value
+                    val pd = pendingDepsState.value
+                    incompatibleVersionNamesState.value = null
+                    pendingVersionsState.value = null
+                    pendingDepsState.value = null
                     if (pv != null && pd != null) {
                         onInstall(pv, pd)
                     }
@@ -372,9 +372,9 @@ private fun DownloadDialog(
                                             }.map { it.getVersionName() }
                                         }
                                         if (incompatible.isNotEmpty()) {
-                                            incompatibleVersionNames = incompatible
-                                            pendingVersions = selectedVersions.toList()
-                                            pendingDeps = selectedDependencies.toList()
+                                            incompatibleVersionNamesState.value = incompatible
+                                            pendingVersionsState.value = selectedVersions.toList()
+                                            pendingDepsState.value = selectedDependencies.toList()
                                         } else {
                                             onInstall(selectedVersions, selectedDependencies.toList())
                                         }

@@ -263,8 +263,8 @@
     <string name="download_assets_install_progress_downloading">Downloading and installing assets\n%1$s\n (%2$s / %3$s)</string>
     <string name="download_assets_install_progress_installing">Installing assets\n%s</string>
     <string name="download_assets_install_failed">Failed to install assets!</string>
-    <string name="download_assets_incompatible_title">Version Incompatibility</string>
-    <string name="download_assets_incompatible_message">This file does not support the following selected game versions:\n%s\n\nInstall anyway?</string>
+    <string name="download_assets_incompatible_title">Несовместимость версий</string>
+    <string name="download_assets_incompatible_message">Этот файл не поддерживает следующие выбранные версии игры:\n%s\n\nВсё равно установить?</string>
     <string name="download_assets_deps_resolving">Resolving dependencies…</string>
     <string name="download_assets_deps_not_found_title">Dependency not found</string>
     <string name="download_assets_deps_not_found_message">Could not find a compatible version for dependency project: %s</string>
