@@ -238,7 +238,7 @@ fun ControlEditorLayer(
                             }
                             (reference * 0.01f) to (reference * 1.0f)
                         }
-                        else -> minSizePx to screenSize.width.toFloat()
+                        ButtonSize.Type.WrapContent -> minSizePx to screenSize.width.toFloat()
                     }
 
                     val (minHeight, maxHeight) = when (oldSize.type) {
@@ -251,7 +251,7 @@ fun ControlEditorLayer(
                             }
                             (reference * 0.01f) to (reference * 1.0f)
                         }
-                        else -> minSizePx to screenSize.height.toFloat()
+                        ButtonSize.Type.WrapContent -> minSizePx to screenSize.height.toFloat()
                     }
 
                     /**
@@ -288,7 +288,7 @@ fun ControlEditorLayer(
                                         .coerceIn(MIN_SIZE_PERCENTAGE, MAX_SIZE_PERCENTAGE)
                                 )
                             }
-                            else -> oldSize
+                            ButtonSize.Type.WrapContent -> oldSize
                         }
                         widget.putWidgetSize(newWidgetSize)
                     }

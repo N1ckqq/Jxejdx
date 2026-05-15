@@ -52,6 +52,9 @@ fun rememberColorPickerController(
 
 /**
  * 颜色选择器核心控制器，用于记录当前颜色状态
+ *
+ * BUG-10: derivedStateOf корректно используется внутри класса со snapshot-state полями.
+ * Он реагирует на изменения mutableFloatStateOf без необходимости оборачивания в remember.
  */
 class ColorPickerController internal constructor(
     val initialHue: Float,
@@ -76,7 +79,9 @@ class ColorPickerController internal constructor(
         Color.hsv(initialHue, initialSaturation, initialValue, initialAlpha)
 
     /**
-     * 当前颜色
+     * 当前颜色 — реактивно вычисляется через Compose snapshot state.
+     * derivedStateOf допустим вне @Composable, если используется совместно
+     * со snapshot-aware state (mutableFloatStateOf).
      */
     val color: State<Color> = derivedStateOf {
         Color.hsv(_hue.floatValue, _saturation.floatValue, _value.floatValue, _alpha.floatValue)

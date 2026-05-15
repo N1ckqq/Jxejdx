@@ -28,8 +28,6 @@ import com.movtery.zalithlauncher.utils.logging.Logger.lWarning
 import org.apache.commons.io.FileUtils
 import java.io.File
 import java.io.FileInputStream
-import java.io.InputStream
-
 abstract class UnpackSingleTask(
     val context: Context,
     val rootDir: File,
@@ -38,14 +36,14 @@ abstract class UnpackSingleTask(
 ) : AbstractUnpackTask() {
     private lateinit var am: AssetManager
     private lateinit var versionFile: File
-    private lateinit var input: InputStream
     private var isCheckFailed: Boolean = false
 
     init {
         runCatching {
             am = context.assets
             versionFile = File("$rootDir/$fileDirName/version")
-            input = am.open("$assetsDirName/$fileDirName/version")
+            // Проверяем доступность файла версии в assets при инициализации
+            am.open("$assetsDirName/$fileDirName/version").close()
         }.onFailure { e ->
             lWarning("Failed to init asset version. assetsPath=$assetsDirName/$fileDirName/version", e)
             isCheckFailed = true
@@ -63,9 +61,9 @@ abstract class UnpackSingleTask(
             InstallableItem.State.NOT_STARTED
         } else {
             runCatching {
-                val fis = FileInputStream(versionFile)
-                val release1 = input.readString()
-                val release2 = fis.readString()
+                val assetStream = am.open("$assetsDirName/$fileDirName/version")
+                val release1 = assetStream.use { it.readString() }
+                val release2 = FileInputStream(versionFile).use { it.readString() }
                 if (release1 != release2) {
                     requestEmptyParentDir(versionFile)
                     InstallableItem.State.PENDING

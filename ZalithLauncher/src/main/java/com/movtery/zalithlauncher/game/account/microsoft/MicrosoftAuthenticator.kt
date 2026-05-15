@@ -117,6 +117,10 @@ suspend fun getTokenResponse(
         return cancelled > 1
     }
 
+    // Начальная задержка перед первым запросом согласно OAuth device flow spec
+    delay(pollingInterval)
+    context.ensureActive()
+
     while (System.currentTimeMillis() < expireTime) {
         context.ensureActive()
 

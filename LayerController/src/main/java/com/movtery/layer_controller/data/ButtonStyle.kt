@@ -136,6 +136,8 @@ data class ButtonStyle(
                     this.pressedBackgroundColor != other.pressedBackgroundColor ||
                     this.contentColor != other.contentColor ||
                     this.pressedContentColor != other.pressedContentColor ||
+                    this.fontSize != other.fontSize ||
+                    this.pressedFontSize != other.pressedFontSize ||
                     this.borderWidth != other.borderWidth ||
                     this.pressedBorderWidth != other.pressedBorderWidth ||
                     this.borderColor != other.borderColor ||
