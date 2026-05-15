@@ -23,6 +23,7 @@ import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.layout.loadLayoutFromFile
 import com.movtery.layer_controller.layout.loadLayoutFromFileUncheck
 import com.movtery.layer_controller.layout.loadLayoutFromString
+import com.movtery.zalithlauncher.game.control.converter.convertPojavLayoutFromString
 import com.movtery.layer_controller.observable.ObservableControlLayout
 import com.movtery.layer_controller.utils.newRandomFileName
 import com.movtery.layer_controller.utils.saveToFile
@@ -215,7 +216,20 @@ object ControlManager {
         try {
             inputStream.use { stream ->
                 val jsonString = stream.readString()
-                val layout = loadLayoutFromString(jsonString)
+
+                // Пробуем загрузить как родной формат ZalithLauncher
+                val layout: ControlLayout = try {
+                    loadLayoutFromString(jsonString)
+                } catch (e: Exception) {
+                    // Не подошёл родной формат — пробуем конвертировать из PojavLauncher/Mojo
+                    try {
+                        convertPojavLayoutFromString(jsonString)
+                    } catch (convertException: Exception) {
+                        // Оба способа не сработали — бросаем исходную ошибку сериализации
+                        throw e
+                    }
+                }
+
                 layout.saveToFile(file)
             }
             onFinished()
