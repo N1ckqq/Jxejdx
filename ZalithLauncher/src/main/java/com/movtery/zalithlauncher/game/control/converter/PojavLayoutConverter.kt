@@ -10,22 +10,26 @@
 
 package com.movtery.zalithlauncher.game.control.converter
 
-import com.movtery.layer_controller.EDITOR_VERSION
 import com.movtery.layer_controller.data.ButtonPosition
 import com.movtery.layer_controller.data.ButtonSize
 import com.movtery.layer_controller.data.VisibilityType
 import com.movtery.layer_controller.data.lang.TranslatableString
+import com.movtery.layer_controller.data.lang.createTranslatable
 import com.movtery.layer_controller.event.ClickEvent
 import com.movtery.layer_controller.layout.ControlLayer
 import com.movtery.layer_controller.layout.ControlLayout
 import com.movtery.layer_controller.data.NormalData
-import com.movtery.layer_controller.utils.randomUUID
-import com.movtery.layer_controller.utils.getAButtonUUID
-import com.movtery.zalithlauncher.game.keycodes.ControlEventKeycode
 import com.movtery.zalithlauncher.utils.logging.Logger.lWarning
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 import kotlin.math.roundToInt
+
+// EDITOR_VERSION = 11 — используем напрямую, чтобы не зависеть от internal
+private const val CURRENT_EDITOR_VERSION = 11
+
+private fun newUUID(): String = UUID.randomUUID().toString().replace("-", "").take(18)
+private fun newLayerUUID(): String = UUID.randomUUID().toString().replace("-", "").take(12)
 
 /**
  * Конвертирует JSON-строку из PojavLauncher / Mojo Launcher в ControlLayout ZalithLauncher.
@@ -39,7 +43,6 @@ fun convertPojavLayoutFromString(jsonString: String): ControlLayout {
     val buttons: JSONArray = when {
         root.has("mControlDataList") -> root.getJSONArray("mControlDataList")
         root.has("button")           -> root.getJSONArray("button")
-        // Если корневой объект является массивом — некоторые версии хранят кнопки напрямую
         else -> throw IllegalArgumentException(
             "Неизвестный формат раскладки: не найдены ключи 'mControlDataList' или 'button'"
         )
@@ -49,7 +52,6 @@ fun convertPojavLayoutFromString(jsonString: String): ControlLayout {
 
     for (i in 0 until buttons.length()) {
         val btn = buttons.optJSONObject(i) ?: continue
-
         val buttonData = convertPojavButton(btn) ?: continue
         normalButtons.add(buttonData)
     }
@@ -57,7 +59,7 @@ fun convertPojavLayoutFromString(jsonString: String): ControlLayout {
     // Все кнопки помещаем в один слой
     val layer = ControlLayer(
         name = "Imported",
-        uuid = randomUUID(),
+        uuid = newLayerUUID(),
         hide = false,
         hideWhenMouse = true,
         hideWhenGamepad = true,
@@ -65,15 +67,14 @@ fun convertPojavLayoutFromString(jsonString: String): ControlLayout {
         normalButtons = normalButtons
     )
 
-    // Метаданные — берём имя из JSON если есть
     val layoutName = root.optString("name", "Imported Layout").ifBlank { "Imported Layout" }
 
     return ControlLayout(
-        editorVersion = EDITOR_VERSION,
+        editorVersion = CURRENT_EDITOR_VERSION,
         info = ControlLayout.Info(
-            name = TranslatableString(default = layoutName),
-            author = TranslatableString(default = "Imported from PojavLauncher/Mojo"),
-            description = TranslatableString(default = "Автоматически конвертирована раскладка"),
+            name = createTranslatable(default = layoutName),
+            author = createTranslatable(default = "Imported from PojavLauncher/Mojo"),
+            description = createTranslatable(default = "Автоматически конвертирована раскладка"),
             versionCode = 1,
             versionName = "1.0"
         ),
@@ -83,20 +84,11 @@ fun convertPojavLayoutFromString(jsonString: String): ControlLayout {
 }
 
 /**
- * Конвертирует одну кнопку из формата PojavLauncher в NormalData ZalithLauncher.
- *
- * PojavLauncher хранит позицию в диапазоне 0..1 (float) или 0..1000 (int).
- * ZalithLauncher хранит позицию в диапазоне 0..10000.
- *
- * PojavLauncher хранит размер в dp или в процентах 0..1.
- * ZalithLauncher хранит размер в dp (absolute) или в процентах 100..10000.
+ * Конвертирует одну кнопку из формата PojavLauncher в NormalData.
  */
 private fun convertPojavButton(btn: JSONObject): NormalData? {
-    // Имя кнопки
     val name = btn.optString("name", "Button").ifBlank { "Button" }
 
-    // Позиция: PojavLauncher хранит x/y как float 0.0..1.0 (доля экрана)
-    // или как int (пиксели — тогда нормализовать нельзя без размера экрана, используем как есть)
     val xRaw = btn.opt("x") ?: btn.opt("mX") ?: 0.5
     val yRaw = btn.opt("y") ?: btn.opt("mY") ?: 0.5
 
@@ -108,14 +100,12 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
         y = (yNorm * 10000).roundToInt().coerceIn(0, 10000)
     )
 
-    // Размер: PojavLauncher хранит width/height как float 0..1 (доля экрана)
     val wRaw = btn.opt("width") ?: btn.opt("mWidth") ?: 0.1
     val hRaw = btn.opt("height") ?: btn.opt("mHeight") ?: 0.1
 
     val wNorm = normalizePosition(wRaw)
     val hNorm = normalizePosition(hRaw)
 
-    // Конвертируем в percentage (100 = 1%, 10000 = 100%)
     val wPercent = (wNorm * 10000).roundToInt().coerceIn(100, 10000)
     val hPercent = (hNorm * 10000).roundToInt().coerceIn(100, 10000)
 
@@ -129,14 +119,12 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
         heightReference = ButtonSize.Reference.ScreenHeight
     )
 
-    // Видимость
     val visibility = when (btn.optString("visibility", "").lowercase()) {
         "in_game" -> VisibilityType.IN_GAME
         "in_menu" -> VisibilityType.IN_MENU
         else -> VisibilityType.ALWAYS
     }
 
-    // Клавиши: PojavLauncher использует "keycodes" (массив) или "keycode" (строка/число)
     val clickEvents = mutableListOf<ClickEvent>()
 
     val keycodesArray: JSONArray? = btn.optJSONArray("keycodes") ?: btn.optJSONArray("mKeycodes")
@@ -158,7 +146,6 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
         }
     }
 
-    // Специальные кнопки PojavLauncher по имени
     if (clickEvents.isEmpty()) {
         val specialKey = convertSpecialButtonName(name)
         if (specialKey != null) {
@@ -167,8 +154,7 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
     }
 
     if (clickEvents.isEmpty()) {
-        lWarning("PojavConverter: кнопка '$name' не имеет клавиш, пропускается")
-        // Не пропускаем — создаём кнопку без события (пользователь сам настроит)
+        lWarning("PojavConverter: кнопка '$name' без клавиш")
     }
 
     val isToggleable = btn.optBoolean("toggled", false) ||
@@ -178,12 +164,11 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
     val isPenetrable = btn.optBoolean("passThrough", false) ||
             btn.optBoolean("mPassThrough", false)
 
-    val isSwipple = btn.optBoolean("passThrough", false) ||
-            btn.optBoolean("swipeable", false)
+    val isSwipple = btn.optBoolean("swipeable", false)
 
     return NormalData(
-        text = TranslatableString(default = name),
-        uuid = getAButtonUUID(),
+        text = createTranslatable(default = name),
+        uuid = newUUID(),
         position = position,
         buttonSize = buttonSize,
         visibilityType = visibility,
@@ -195,9 +180,7 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
 }
 
 /**
- * Нормализует позицию/размер в диапазон 0..1.
- * PojavLauncher использует либо float 0..1, либо int (пиксели).
- * Если значение > 1 — считаем что это проценты/пиксели относительно 100 или 1000.
+ * Нормализует значение позиции/размера в диапазон 0..1.
  */
 private fun normalizePosition(raw: Any): Float {
     return when (raw) {
@@ -211,18 +194,13 @@ private fun normalizePosition(raw: Any): Float {
 }
 
 /**
- * Конвертирует код клавиши из формата PojavLauncher в строку GLFW.
- * PojavLauncher хранит либо числовой GLFW-код, либо строку вида "GLFW_KEY_W".
+ * Конвертирует код клавиши: число или строка GLFW → строка GLFW.
  */
 private fun convertKeycode(raw: Any): String? {
     return when (raw) {
         is String -> {
             when {
-                // Уже в формате GLFW — проверяем что он валиден
-                raw.startsWith("GLFW_") -> {
-                    if (ControlEventKeycode.getKeycodeFromEvent(raw) != null) raw else null
-                }
-                // Числовая строка
+                raw.startsWith("GLFW_") -> raw
                 else -> raw.toIntOrNull()?.let { convertGlfwInt(it) }
             }
         }
@@ -234,94 +212,118 @@ private fun convertKeycode(raw: Any): String? {
 }
 
 /**
- * Конвертирует числовой GLFW-код в строковое имя.
- * Числа совпадают с ASCII для печатаемых символов.
+ * Числовой GLFW-код → строка вида "GLFW_KEY_*".
  */
-private fun convertGlfwInt(code: Int): String? {
-    return when (code) {
-        -1, 0     -> null
-        32        -> "GLFW_KEY_SPACE"
-        39        -> "GLFW_KEY_APOSTROPHE"
-        44        -> "GLFW_KEY_COMMA"
-        45        -> "GLFW_KEY_MINUS"
-        46        -> "GLFW_KEY_PERIOD"
-        47        -> "GLFW_KEY_SLASH"
-        in 48..57 -> "GLFW_KEY_${code - 48}"
-        59        -> "GLFW_KEY_SEMICOLON"
-        61        -> "GLFW_KEY_EQUAL"
-        in 65..90 -> "GLFW_KEY_${'A' + (code - 65)}"
-        91        -> "GLFW_KEY_LEFT_BRACKET"
-        92        -> "GLFW_KEY_BACKSLASH"
-        93        -> "GLFW_KEY_RIGHT_BRACKET"
-        96        -> "GLFW_KEY_GRAVE_ACCENT"
-        256       -> "GLFW_KEY_ESCAPE"
-        257       -> "GLFW_KEY_ENTER"
-        258       -> "GLFW_KEY_TAB"
-        259       -> "GLFW_KEY_BACKSPACE"
-        260       -> "GLFW_KEY_INSERT"
-        261       -> "GLFW_KEY_DELETE"
-        262       -> "GLFW_KEY_RIGHT"
-        263       -> "GLFW_KEY_LEFT"
-        264       -> "GLFW_KEY_DOWN"
-        265       -> "GLFW_KEY_UP"
-        266       -> "GLFW_KEY_PAGE_UP"
-        267       -> "GLFW_KEY_PAGE_DOWN"
-        268       -> "GLFW_KEY_HOME"
-        269       -> "GLFW_KEY_END"
-        280       -> "GLFW_KEY_CAPS_LOCK"
-        290       -> "GLFW_KEY_F1"
-        291       -> "GLFW_KEY_F2"
-        292       -> "GLFW_KEY_F3"
-        293       -> "GLFW_KEY_F4"
-        294       -> "GLFW_KEY_F5"
-        295       -> "GLFW_KEY_F6"
-        296       -> "GLFW_KEY_F7"
-        297       -> "GLFW_KEY_F8"
-        298       -> "GLFW_KEY_F9"
-        299       -> "GLFW_KEY_F10"
-        300       -> "GLFW_KEY_F11"
-        301       -> "GLFW_KEY_F12"
-        340       -> "GLFW_KEY_LEFT_SHIFT"
-        341       -> "GLFW_KEY_LEFT_CONTROL"
-        342       -> "GLFW_KEY_LEFT_ALT"
-        344       -> "GLFW_KEY_RIGHT_SHIFT"
-        345       -> "GLFW_KEY_RIGHT_CONTROL"
-        346       -> "GLFW_KEY_RIGHT_ALT"
-        // Mouse
-        -100      -> "GLFW_MOUSE_BUTTON_LEFT"
-        -101      -> "GLFW_MOUSE_BUTTON_RIGHT"
-        -102      -> "GLFW_MOUSE_BUTTON_MIDDLE"
-        else -> {
-            lWarning("PojavConverter: неизвестный keycode=$code, игнорируется")
-            null
-        }
-    }
+private fun convertGlfwInt(code: Int): String? = when (code) {
+    -1, 0     -> null
+    32        -> "GLFW_KEY_SPACE"
+    39        -> "GLFW_KEY_APOSTROPHE"
+    44        -> "GLFW_KEY_COMMA"
+    45        -> "GLFW_KEY_MINUS"
+    46        -> "GLFW_KEY_PERIOD"
+    47        -> "GLFW_KEY_SLASH"
+    48        -> "GLFW_KEY_0"
+    49        -> "GLFW_KEY_1"
+    50        -> "GLFW_KEY_2"
+    51        -> "GLFW_KEY_3"
+    52        -> "GLFW_KEY_4"
+    53        -> "GLFW_KEY_5"
+    54        -> "GLFW_KEY_6"
+    55        -> "GLFW_KEY_7"
+    56        -> "GLFW_KEY_8"
+    57        -> "GLFW_KEY_9"
+    59        -> "GLFW_KEY_SEMICOLON"
+    61        -> "GLFW_KEY_EQUAL"
+    65        -> "GLFW_KEY_A"
+    66        -> "GLFW_KEY_B"
+    67        -> "GLFW_KEY_C"
+    68        -> "GLFW_KEY_D"
+    69        -> "GLFW_KEY_E"
+    70        -> "GLFW_KEY_F"
+    71        -> "GLFW_KEY_G"
+    72        -> "GLFW_KEY_H"
+    73        -> "GLFW_KEY_I"
+    74        -> "GLFW_KEY_J"
+    75        -> "GLFW_KEY_K"
+    76        -> "GLFW_KEY_L"
+    77        -> "GLFW_KEY_M"
+    78        -> "GLFW_KEY_N"
+    79        -> "GLFW_KEY_O"
+    80        -> "GLFW_KEY_P"
+    81        -> "GLFW_KEY_Q"
+    82        -> "GLFW_KEY_R"
+    83        -> "GLFW_KEY_S"
+    84        -> "GLFW_KEY_T"
+    85        -> "GLFW_KEY_U"
+    86        -> "GLFW_KEY_V"
+    87        -> "GLFW_KEY_W"
+    88        -> "GLFW_KEY_X"
+    89        -> "GLFW_KEY_Y"
+    90        -> "GLFW_KEY_Z"
+    91        -> "GLFW_KEY_LEFT_BRACKET"
+    92        -> "GLFW_KEY_BACKSLASH"
+    93        -> "GLFW_KEY_RIGHT_BRACKET"
+    96        -> "GLFW_KEY_GRAVE_ACCENT"
+    256       -> "GLFW_KEY_ESCAPE"
+    257       -> "GLFW_KEY_ENTER"
+    258       -> "GLFW_KEY_TAB"
+    259       -> "GLFW_KEY_BACKSPACE"
+    260       -> "GLFW_KEY_INSERT"
+    261       -> "GLFW_KEY_DELETE"
+    262       -> "GLFW_KEY_RIGHT"
+    263       -> "GLFW_KEY_LEFT"
+    264       -> "GLFW_KEY_DOWN"
+    265       -> "GLFW_KEY_UP"
+    266       -> "GLFW_KEY_PAGE_UP"
+    267       -> "GLFW_KEY_PAGE_DOWN"
+    268       -> "GLFW_KEY_HOME"
+    269       -> "GLFW_KEY_END"
+    280       -> "GLFW_KEY_CAPS_LOCK"
+    290       -> "GLFW_KEY_F1"
+    291       -> "GLFW_KEY_F2"
+    292       -> "GLFW_KEY_F3"
+    293       -> "GLFW_KEY_F4"
+    294       -> "GLFW_KEY_F5"
+    295       -> "GLFW_KEY_F6"
+    296       -> "GLFW_KEY_F7"
+    297       -> "GLFW_KEY_F8"
+    298       -> "GLFW_KEY_F9"
+    299       -> "GLFW_KEY_F10"
+    300       -> "GLFW_KEY_F11"
+    301       -> "GLFW_KEY_F12"
+    340       -> "GLFW_KEY_LEFT_SHIFT"
+    341       -> "GLFW_KEY_LEFT_CONTROL"
+    342       -> "GLFW_KEY_LEFT_ALT"
+    344       -> "GLFW_KEY_RIGHT_SHIFT"
+    345       -> "GLFW_KEY_RIGHT_CONTROL"
+    346       -> "GLFW_KEY_RIGHT_ALT"
+    -100      -> "GLFW_MOUSE_BUTTON_LEFT"
+    -101      -> "GLFW_MOUSE_BUTTON_RIGHT"
+    -102      -> "GLFW_MOUSE_BUTTON_MIDDLE"
+    else      -> null
 }
 
 /**
- * Конвертирует специальные имена кнопок PojavLauncher в клавиши GLFW.
+ * Специальные имена кнопок PojavLauncher → клавиши GLFW.
  */
-private fun convertSpecialButtonName(name: String): String? {
-    return when (name.lowercase().trim()) {
-        "chat", "t"          -> "GLFW_KEY_T"
-        "inventory", "e"     -> "GLFW_KEY_E"
-        "drop", "q"          -> "GLFW_KEY_Q"
-        "sprint", "sprint_toggle" -> "GLFW_KEY_LEFT_CONTROL"
-        "sneak", "shift"     -> "GLFW_KEY_LEFT_SHIFT"
-        "jump", "space"      -> "GLFW_KEY_SPACE"
-        "attack", "lmb"      -> "GLFW_MOUSE_BUTTON_LEFT"
-        "use", "rmb"         -> "GLFW_MOUSE_BUTTON_RIGHT"
-        "pick", "mmb"        -> "GLFW_MOUSE_BUTTON_MIDDLE"
-        "forward", "w"       -> "GLFW_KEY_W"
-        "back", "s"          -> "GLFW_KEY_S"
-        "left", "a"          -> "GLFW_KEY_A"
-        "right", "d"         -> "GLFW_KEY_D"
-        "esc", "escape", "menu" -> "GLFW_KEY_ESCAPE"
-        "enter"              -> "GLFW_KEY_ENTER"
-        "tab"                -> "GLFW_KEY_TAB"
-        "swap", "f"          -> "GLFW_KEY_F"
-        "advancements"       -> "GLFW_KEY_L"
-        "playerlist"         -> "GLFW_KEY_TAB"
-        else -> null
-    }
+private fun convertSpecialButtonName(name: String): String? = when (name.lowercase().trim()) {
+    "chat", "t"               -> "GLFW_KEY_T"
+    "inventory", "e"          -> "GLFW_KEY_E"
+    "drop", "q"               -> "GLFW_KEY_Q"
+    "sprint", "sprint_toggle" -> "GLFW_KEY_LEFT_CONTROL"
+    "sneak", "shift"          -> "GLFW_KEY_LEFT_SHIFT"
+    "jump", "space"           -> "GLFW_KEY_SPACE"
+    "attack", "lmb"           -> "GLFW_MOUSE_BUTTON_LEFT"
+    "use", "rmb"              -> "GLFW_MOUSE_BUTTON_RIGHT"
+    "pick", "mmb"             -> "GLFW_MOUSE_BUTTON_MIDDLE"
+    "forward", "w"            -> "GLFW_KEY_W"
+    "back", "s"               -> "GLFW_KEY_S"
+    "left", "a"               -> "GLFW_KEY_A"
+    "right", "d"              -> "GLFW_KEY_D"
+    "esc", "escape", "menu"   -> "GLFW_KEY_ESCAPE"
+    "enter"                   -> "GLFW_KEY_ENTER"
+    "tab"                     -> "GLFW_KEY_TAB"
+    "swap", "f"               -> "GLFW_KEY_F"
+    "advancements"            -> "GLFW_KEY_L"
+    else                      -> null
 }
