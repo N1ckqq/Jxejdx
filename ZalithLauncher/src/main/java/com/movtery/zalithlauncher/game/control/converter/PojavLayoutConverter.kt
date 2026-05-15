@@ -95,17 +95,26 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
     val xNorm = normalizePosition(xRaw)
     val yNorm = normalizePosition(yRaw)
 
-    val position = ButtonPosition(
-        x = (xNorm * 10000).roundToInt().coerceIn(0, 10000),
-        y = (yNorm * 10000).roundToInt().coerceIn(0, 10000)
-    )
-
     val wRaw = btn.opt("width") ?: btn.opt("mWidth") ?: 0.1
     val hRaw = btn.opt("height") ?: btn.opt("mHeight") ?: 0.1
 
     val wNorm = normalizePosition(wRaw)
     val hNorm = normalizePosition(hRaw)
 
+    // PojavLauncher: x/y — левый верхний угол кнопки.
+    // ZalithLauncher: position — центр кнопки.
+    // Сдвигаем на половину размера, чтобы кнопки встали на правильные места.
+    // Размеры у PojavLauncher: width — % от ширины экрана, height — % от высоты.
+    // Для центра: cx = x + width/2, cy = y + height/2
+    val cxNorm = (xNorm + wNorm / 2f).coerceIn(0f, 1f)
+    val cyNorm = (yNorm + hNorm / 2f).coerceIn(0f, 1f)
+
+    val position = ButtonPosition(
+        x = (cxNorm * 10000).roundToInt().coerceIn(0, 10000),
+        y = (cyNorm * 10000).roundToInt().coerceIn(0, 10000)
+    )
+
+    // ButtonSize: percentage 100 = 1%, 10000 = 100%
     val wPercent = (wNorm * 10000).roundToInt().coerceIn(100, 10000)
     val hPercent = (hNorm * 10000).roundToInt().coerceIn(100, 10000)
 
@@ -115,8 +124,8 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
         heightDp = 50f,
         widthPercentage = wPercent,
         heightPercentage = hPercent,
-        widthReference = ButtonSize.Reference.ScreenWidth,
-        heightReference = ButtonSize.Reference.ScreenHeight
+        widthReference = ButtonSize.Reference.ScreenWidth,   // ширина относительно ширины экрана
+        heightReference = ButtonSize.Reference.ScreenHeight  // высота относительно высоты экрана
     )
 
     val visibility = when (btn.optString("visibility", "").lowercase()) {
@@ -181,16 +190,24 @@ private fun convertPojavButton(btn: JSONObject): NormalData? {
 
 /**
  * Нормализует значение позиции/размера в диапазон 0..1.
+ *
+ * PojavLauncher хранит x/y/width/height как проценты от экрана: 0.0 .. 100.0
+ * Пример: x=85.5 означает 85.5% ширины экрана.
+ *
+ * Некоторые старые версии хранят как доли 0.0..1.0 — определяем по значению.
  */
 private fun normalizePosition(raw: Any): Float {
-    return when (raw) {
-        is Double -> if (raw > 1.0) (raw / 100.0).toFloat().coerceIn(0f, 1f) else raw.toFloat().coerceIn(0f, 1f)
-        is Float  -> if (raw > 1f) (raw / 100f).coerceIn(0f, 1f) else raw.coerceIn(0f, 1f)
-        is Int    -> if (raw > 1) (raw / 100f).coerceIn(0f, 1f) else raw.toFloat().coerceIn(0f, 1f)
-        is Long   -> if (raw > 1L) (raw / 100f).coerceIn(0f, 1f) else raw.toFloat().coerceIn(0f, 1f)
-        is String -> raw.toFloatOrNull()?.let { normalizePosition(it) } ?: 0f
+    val v = when (raw) {
+        is Double -> raw.toFloat()
+        is Float  -> raw
+        is Int    -> raw.toFloat()
+        is Long   -> raw.toFloat()
+        is String -> raw.toFloatOrNull() ?: 0f
         else      -> 0f
     }
+    // Если значение > 1 — это проценты (0..100), делим на 100
+    // Если значение <= 1 — уже доля (0..1), оставляем как есть
+    return if (v > 1f) (v / 100f).coerceIn(0f, 1f) else v.coerceIn(0f, 1f)
 }
 
 /**
