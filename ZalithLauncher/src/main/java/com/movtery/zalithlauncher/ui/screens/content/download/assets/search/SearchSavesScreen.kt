@@ -24,6 +24,7 @@ import com.movtery.zalithlauncher.game.download.assets.platform.PlatformClasses
 import com.movtery.zalithlauncher.game.download.assets.platform.curseforge.models.CurseForgeSavesCategory
 import com.movtery.zalithlauncher.ui.screens.NormalNavKey
 import com.movtery.zalithlauncher.ui.screens.TitledNavKey
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.BatchDownloadState
 
 @Composable
 fun SearchSavesScreen(
@@ -31,6 +32,7 @@ fun SearchSavesScreen(
     downloadScreenKey: TitledNavKey?,
     downloadSavesScreenKey: TitledNavKey,
     downloadSavesScreenCurrentKey: TitledNavKey?,
+    batchState: BatchDownloadState? = null,
     swapToDownload: (Platform, projectId: String, iconUrl: String?) -> Unit = { _, _, _ -> }
 ) {
     SearchAssetsScreen(
@@ -46,6 +48,7 @@ fun SearchSavesScreen(
         mapCategories = { platform, string ->
             CurseForgeSavesCategory.entries.find { it.describe() == string }
         },
-        swapToDownload = swapToDownload
+        swapToDownload = swapToDownload,
+        batchState = batchState
     )
 }

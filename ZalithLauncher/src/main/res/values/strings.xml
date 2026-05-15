@@ -233,6 +233,10 @@
     <string name="download_assets_batch_download">Download %d mod(s)</string>
     <string name="download_mods_batch_selected">%d mod(s) selected</string>
     <string name="download_mods_batch_install_for_versions">Install %d mod(s) for versions</string>
+    <string name="download_resource_pack_batch_selected">%d resource pack(s) selected</string>
+    <string name="download_resource_pack_batch_install_for_versions">Install %d resource pack(s) for versions</string>
+    <string name="download_saves_batch_selected">%d world(s) selected</string>
+    <string name="download_saves_batch_install_for_versions">Install %d world(s) for versions</string>
     <string name="download_history_title">Download History</string>
     <string name="download_history_empty">No download history yet</string>
     <string name="download_history_clear_title">Clear History</string>

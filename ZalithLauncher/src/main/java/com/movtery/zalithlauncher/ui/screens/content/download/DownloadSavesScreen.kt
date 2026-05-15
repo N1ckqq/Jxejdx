@@ -18,20 +18,35 @@
 
 package com.movtery.zalithlauncher.ui.screens.content.download
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.movtery.zalithlauncher.R
+import com.movtery.zalithlauncher.game.download.assets.downloadBatchAssets
 import com.movtery.zalithlauncher.game.download.assets.downloadSingleForVersions
 import com.movtery.zalithlauncher.game.version.saves.unpackSaveZip
 import com.movtery.zalithlauncher.game.download.assets.platform.PlatformClasses
@@ -39,7 +54,9 @@ import com.movtery.zalithlauncher.ui.screens.NestedNavKey
 import com.movtery.zalithlauncher.ui.screens.NormalNavKey
 import com.movtery.zalithlauncher.ui.screens.TitledNavKey
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.download.DownloadAssetsScreen
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.BatchVersionSelectDialog
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.DownloadSingleOperation
+import com.movtery.zalithlauncher.ui.screens.content.download.assets.elements.rememberBatchDownloadState
 import com.movtery.zalithlauncher.ui.screens.content.download.assets.search.SearchSavesScreen
 import com.movtery.zalithlauncher.ui.screens.navigateTo
 import com.movtery.zalithlauncher.ui.screens.onBack
@@ -71,7 +88,39 @@ fun DownloadSavesScreen(
 
     val context = LocalContext.current
 
-    //下载资源操作
+    // Batch download state
+    val batchState = rememberBatchDownloadState()
+    var showBatchDialog by remember { mutableStateOf(false) }
+
+    if (showBatchDialog) {
+        BatchVersionSelectDialog(
+            modCount = batchState.selectedCount,
+            titleRes = R.string.download_saves_batch_install_for_versions,
+            onDismiss = { showBatchDialog = false },
+            onInstall = { gameVersions ->
+                showBatchDialog = false
+                val selected = batchState.getSelectedList()
+                batchState.disableSelectionMode()
+                downloadBatchAssets(
+                    context = context,
+                    assets = selected,
+                    targetVersions = gameVersions,
+                    folder = PlatformClasses.SAVES.versionFolder.folderName,
+                    onFileCopied = { file, folder ->
+                        unpackSaveZip(zipFile = file, targetPath = folder)
+                    },
+                    onFileCancelled = { file, folder ->
+                        CoroutineScope(Dispatchers.IO).launch {
+                            FileUtils.deleteQuietly(File(folder, file.nameWithoutExtension))
+                        }
+                    },
+                    submitError = submitError
+                )
+            }
+        )
+    }
+
+    // Single download operation state
     var operation by remember { mutableStateOf<DownloadSingleOperation>(DownloadSingleOperation.None) }
     DownloadSingleOperation(
         operation = operation,
@@ -106,50 +155,76 @@ fun DownloadSavesScreen(
     )
 
     if (backStack.isNotEmpty()) {
-        NavDisplay(
-            backStack = backStack,
-            modifier = Modifier.fillMaxSize(),
-            onBack = {
-                onBack(backStack)
-            },
-            entryDecorators = listOf(
-                rememberSaveableStateHolderNavEntryDecorator(),
-                rememberViewModelStoreNavEntryDecorator()
-            ),
-            transitionSpec = rememberTransitionSpec(),
-            popTransitionSpec = rememberTransitionSpec(),
-            entryProvider = entryProvider {
-                entry<NormalNavKey.SearchSaves> {
-                    SearchSavesScreen(
-                        mainScreenKey = mainScreenKey,
-                        downloadScreenKey = downloadScreenKey,
-                        downloadSavesScreenKey = key,
-                        downloadSavesScreenCurrentKey = downloadSavesScreenKey
-                    ) { platform, projectId, _ ->
-                        backStack.navigateTo(
-                            NormalNavKey.DownloadAssets(platform, projectId, PlatformClasses.SAVES)
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavDisplay(
+                backStack = backStack,
+                modifier = Modifier.fillMaxSize(),
+                onBack = {
+                    onBack(backStack)
+                },
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator(),
+                    rememberViewModelStoreNavEntryDecorator()
+                ),
+                transitionSpec = rememberTransitionSpec(),
+                popTransitionSpec = rememberTransitionSpec(),
+                entryProvider = entryProvider {
+                    entry<NormalNavKey.SearchSaves> {
+                        SearchSavesScreen(
+                            mainScreenKey = mainScreenKey,
+                            downloadScreenKey = downloadScreenKey,
+                            downloadSavesScreenKey = key,
+                            downloadSavesScreenCurrentKey = downloadSavesScreenKey,
+                            batchState = batchState
+                        ) { platform, projectId, _ ->
+                            backStack.navigateTo(
+                                NormalNavKey.DownloadAssets(platform, projectId, PlatformClasses.SAVES)
+                            )
+                        }
+                    }
+                    entry<NormalNavKey.DownloadAssets> { assetsKey ->
+                        DownloadAssetsScreen(
+                            mainScreenKey = mainScreenKey,
+                            parentScreenKey = key,
+                            parentCurrentKey = downloadScreenKey,
+                            currentKey = downloadSavesScreenKey,
+                            key = assetsKey,
+                            eventViewModel = eventViewModel,
+                            onItemClicked = { classes, version, _, deps ->
+                                operation = if (isUsingMobileData(context)) {
+                                    DownloadSingleOperation.WarningForMobileData(classes, version, deps)
+                                } else {
+                                    DownloadSingleOperation.SelectVersion(classes, version, deps)
+                                }
+                            }
                         )
                     }
                 }
-                entry<NormalNavKey.DownloadAssets> { assetsKey ->
-                    DownloadAssetsScreen(
-                        mainScreenKey = mainScreenKey,
-                        parentScreenKey = key,
-                        parentCurrentKey = downloadScreenKey,
-                        currentKey = downloadSavesScreenKey,
-                        key = assetsKey,
-                        eventViewModel = eventViewModel,
-                        onItemClicked = { classes, version, _, deps ->
-                            operation = if (isUsingMobileData(context)) {
-                                DownloadSingleOperation.WarningForMobileData(classes, version, deps)
-                            } else {
-                                DownloadSingleOperation.SelectVersion(classes, version, deps)
-                            }
-                        }
-                    )
-                }
+            )
+
+            // FAB for batch download
+            AnimatedVisibility(
+                visible = batchState.isSelectionMode && batchState.hasSelection,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = { showBatchDialog = true },
+                    icon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_download),
+                            contentDescription = null
+                        )
+                    },
+                    text = {
+                        Text(text = stringResource(R.string.download_saves_batch_selected, batchState.selectedCount))
+                    }
+                )
             }
-        )
+        }
     } else {
         Box(Modifier.fillMaxSize())
     }
