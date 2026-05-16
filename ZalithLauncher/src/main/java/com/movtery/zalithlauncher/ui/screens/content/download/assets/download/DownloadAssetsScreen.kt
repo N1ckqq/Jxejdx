@@ -474,11 +474,15 @@ private fun Versions(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                     state = scrollState
                 ) {
-                    items(versions.result) { info ->
+                    items(
+                        items = versions.result,
+                        key = { "${it.gameVersion}_${it.loader?.getDisplayName() ?: "null"}" }
+                    ) { info ->
                         AssetsVersionItemLayout(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 6.dp)
+                                .animateItem(),
                             infoMap = info,
                             onItemClicked = onItemClicked
                         )
@@ -678,7 +682,10 @@ private fun ProjectInfo(
                     }
 
                     //屏幕截图
-                    items(screenshots) { screenshot ->
+                    items(
+                        items = screenshots,
+                        key = { it.imageUrl }
+                    ) { screenshot ->
                         ScreenshotItemLayout(
                             modifier = Modifier.fillMaxWidth(),
                             screenshot = screenshot

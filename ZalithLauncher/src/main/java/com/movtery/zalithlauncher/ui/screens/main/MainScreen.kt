@@ -54,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -139,7 +140,7 @@ fun MainScreen(
         }
     }
 
-    val isTaskMenuExpanded = AllSettings.launcherTaskMenuExpanded.state
+    val isTaskMenuExpanded by remember { derivedStateOf { AllSettings.launcherTaskMenuExpanded.state } }
 
     fun changeTasksExpandedState() {
         AllSettings.launcherTaskMenuExpanded.save(!isTaskMenuExpanded)
@@ -154,7 +155,7 @@ fun MainScreen(
     val inLauncherScreen = mainScreenKey == null || mainScreenKey is NormalNavKey.LauncherMain
 
     val isBackgroundValid = LocalBackgroundViewModel.current?.isValid == true
-    val launcherBackgroundOpacity = AllSettings.launcherBackgroundOpacity.state.toFloat() / 100f
+    val launcherBackgroundOpacity by remember { derivedStateOf { AllSettings.launcherBackgroundOpacity.state.toFloat() / 100f } }
 
     val backgroundColor = if (isBackgroundValid) {
         backgroundColor().copy(alpha = launcherBackgroundOpacity)
@@ -167,7 +168,7 @@ fun MainScreen(
     ) {
         Column(
             modifier = Modifier
-                .applyFullscreen(AllSettings.launcherFullScreen.state)
+                .applyFullscreen(remember { derivedStateOf { AllSettings.launcherFullScreen.state } }.value)
         ) {
             TopBar(
                 modifier = Modifier
@@ -722,7 +723,7 @@ private fun TaskMenu(
                         .weight(1f),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    items(tasks) { task ->
+                    items(tasks, key = { it.id }) { task ->
                         TaskItem(
                             taskProgress = task.currentProgress,
                             taskMessageRes = task.currentMessageRes,

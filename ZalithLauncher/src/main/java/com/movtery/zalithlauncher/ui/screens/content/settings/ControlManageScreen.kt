@@ -18,7 +18,6 @@
 
 package com.movtery.zalithlauncher.ui.screens.content.settings
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,7 +120,6 @@ import com.movtery.zalithlauncher.ui.theme.cardColor
 import com.movtery.zalithlauncher.ui.theme.itemColor
 import com.movtery.zalithlauncher.ui.theme.onCardColor
 import com.movtery.zalithlauncher.ui.theme.onItemColor
-import com.movtery.zalithlauncher.utils.animation.getAnimateTween
 import com.movtery.zalithlauncher.utils.file.shareFile
 import com.movtery.zalithlauncher.utils.string.getMessageOrToString
 import com.movtery.zalithlauncher.utils.string.isEmptyOrBlank
@@ -464,20 +462,29 @@ private fun ControlLayoutList(
             )
 
             if (dataList.isNotEmpty()) {
+                // Читаем selectedFileName один раз снаружи items{}, чтобы
+                // при смене выбранной раскладки перерисовывался только один элемент.
+                val selectedLayout by ControlManager.selectedLayout.collectAsStateWithLifecycle()
+                val selectedFileName = selectedLayout?.file?.name
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    items(dataList) { data ->
+                    items(
+                        items = dataList,
+                        key = { it.file.absolutePath }
+                    ) { data ->
                         ControlLayoutItem(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 6.dp)
+                                .animateItem(),
                             data = data,
                             locale = locale,
-                            selected = data.file.name == AllSettings.controlLayout.state,
+                            selected = data.file.name == selectedFileName,
                             onSelected = { ControlManager.selectControl(data) },
                             onCopy = { onCopy(data) },
                             onDelete = { onDelete(data) }
@@ -561,12 +568,8 @@ private fun ControlLayoutItem(
     color: Color = itemColor(),
     contentColor: Color = onItemColor(),
 ) {
-    val scale = remember { Animatable(initialValue = 0.95f) }
-    LaunchedEffect(Unit) {
-        scale.animateTo(targetValue = 1f, animationSpec = getAnimateTween())
-    }
     Surface(
-        modifier = modifier.graphicsLayer(scaleY = scale.value, scaleX = scale.value),
+        modifier = modifier,
         color = color,
         contentColor = contentColor,
         shape = MaterialTheme.shapes.large,
