@@ -121,6 +121,17 @@ fun convertLayoutJson(jsonString: String): ConversionResult {
         }
     }
 
+    // 4. Старый формат PojavLauncher / ZalithLauncher 1.x
+    //    Признак: есть поля `mControlDataList` и `scaledAt`
+    if (isPojavLegacyFormat(jsonObject)) {
+        return try {
+            val layout = convertPojavLegacyLayout(jsonObject)
+            ConversionResult.Success(layout)
+        } catch (e: Exception) {
+            ConversionResult.ParseError(e)
+        }
+    }
+
     return ConversionResult.UnknownFormat(
         "JSON does not contain required fields: 'editorVersion', 'info', 'layers'. " +
         "Found keys: ${jsonObject.keys.take(10).joinToString()}"
