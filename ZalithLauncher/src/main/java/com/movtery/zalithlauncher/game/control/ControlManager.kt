@@ -19,7 +19,9 @@
 package com.movtery.zalithlauncher.game.control
 
 import android.content.Context
+import com.movtery.layer_controller.layout.ConversionResult
 import com.movtery.layer_controller.layout.ControlLayout
+import com.movtery.layer_controller.layout.convertLayoutJson
 import com.movtery.layer_controller.layout.loadLayoutFromFile
 import com.movtery.layer_controller.layout.loadLayoutFromFileUncheck
 import com.movtery.layer_controller.layout.loadLayoutFromString
@@ -204,6 +206,9 @@ object ControlManager {
 
     /**
      * 尝试导入控制布局
+     * Сначала пробует загрузить JSON как штатный формат Zalith.
+     * Если парсинг не удался — запускает конвертер [convertLayoutJson],
+     * который умеет работать со старыми и сторонними форматами.
      */
     suspend fun importControl(
         inputStream: InputStream,
@@ -215,7 +220,29 @@ object ControlManager {
         try {
             inputStream.use { stream ->
                 val jsonString = stream.readString()
-                val layout = loadLayoutFromString(jsonString)
+
+                // Сначала пробуем штатный путь
+                val layout = try {
+                    loadLayoutFromString(jsonString)
+                } catch (nativeError: SerializationException) {
+                    // Штатный парсинг не прошёл — запускаем конвертер
+                    when (val result = convertLayoutJson(jsonString)) {
+                        is ConversionResult.AlreadyValid -> result.layout
+                        is ConversionResult.Success      -> result.layout
+                        is ConversionResult.UnknownFormat -> {
+                            FileUtils.deleteQuietly(file)
+                            onSerializationError(SerializationException(result.reason, nativeError))
+                            return@withContext
+                        }
+                        is ConversionResult.ParseError -> {
+                            FileUtils.deleteQuietly(file)
+                            onSerializationError(result.error as? SerializationException
+                                ?: SerializationException(result.error.message, result.error))
+                            return@withContext
+                        }
+                    }
+                }
+
                 layout.saveToFile(file)
             }
             onFinished()
